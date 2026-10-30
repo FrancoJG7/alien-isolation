@@ -1,0 +1,9 @@
+LIBRARY xinput_ag
+EXPORTS
+    XInputGetState=XInputGetState@8
+    XInputSetState=XInputSetState@8
+    XInputGetCapabilities=XInputGetCapabilities@12
+    XInputEnable=XInputEnable@4
+    XInputGetDSoundAudioDeviceGuids=XInputGetDSoundAudioDeviceGuids@12
+    XInputGetBatteryInformation=XInputGetBatteryInformation@12
+    XInputGetKeystroke=XInputGetKeystroke@12

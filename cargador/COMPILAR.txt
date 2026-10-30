@@ -1,0 +1,33 @@
+Compilar (Linux con mingw-w64, paquete gcc-mingw-w64-i686), desde src:
+  F="-O2 -Wall -Wextra -Wno-unused-parameter -Wno-cast-function-type -shared -static -static-libgcc"
+  El cargador (xinput_ag.dll, fijo mientras el juego esta abierto):
+  i686-w64-mingw32-gcc $F -o ../xinput_ag.dll cargador.c diferidos.c tecla.c xinput_ag.def -Wl,--enable-stdcall-fixup -s
+  Una feature (va en mods_vr, se puede cambiar con el juego abierto):
+  i686-w64-mingw32-gcc $F -o ../mods_vr/agachar.dll agachar.c logica.c -s
+
+Hacer una feature nueva:
+  - incluir anfitrion.h y exportar  int mod_iniciar(const Anfitrion *a, Feature *f);
+  - completar en f solo lo que se usa (tick, pose, config, pausa, vibracion_juego, terminar);
+  - nunca escribir memoria del juego: pedir los enganches con a->enganchar_puntero / a->enganchar_codigo;
+  - lo que tenga que sobrevivir a una recarga, al baul (a->baul_guardar en terminar, a->baul_leer al iniciar);
+  - cerrar en terminar los hilos y objetos propios.
+  Ejemplo minimo: pruebas/feature_prueba.c.
+
+Pruebas de logica (agacharse):
+  gcc -O2 -o prueba_logica pruebas/prueba_logica.c src/logica.c -lm && ./prueba_logica
+Emulacion del parche de GRAND (pip install unicorn pefile capstone):
+  python pruebas/emular_grand.py XINPUT1_3.dll.original XINPUT1_3.dll
+Prueba de la busqueda de OpenVR dentro de MotherVR (con su dxgi.dll):
+  gcc -O2 -o prueba_diferidos pruebas/prueba_diferidos.c src/diferidos.c && ./prueba_diferidos dxgi.dll
+Prueba de la busqueda de PeekMessageA en la tabla de importacion (con AI.exe):
+  gcc -O2 -o prueba_importacion pruebas/prueba_importacion.c src/diferidos.c && ./prueba_importacion AI.exe
+Prueba de las teclas:
+  gcc -O2 -o prueba_tecla pruebas/prueba_tecla.c src/tecla.c && ./prueba_tecla
+Emulacion de las poses de MotherVR (con su dxgi.dll):
+  python pruebas/emular_pose_mothervr.py dxgi.dll
+Prueba de la recarga en vivo de varias features (Windows o Wine 9 + xvfb; con el dxgi.dll de MotherVR 0.8.1):
+  en una carpeta con xinput_ag.dll, dxgi.dll y mods_vr\agachar.ini, compilar
+    agachar con -DVERSION='"agachar v0.2.0 A"' y B  ->  agachar_a.dll, agachar_b.dll
+    pruebas/feature_prueba.c con -DVERSION='"prueba A"' y B  ->  prueba_a.dll, prueba_b.dll
+    i686-w64-mingw32-gcc -O2 -o prueba_recarga.exe pruebas/prueba_recarga.c
+  y correr:  prueba_recarga.exe dxgi.dll     (en Wine: WINEDLLOVERRIDES="dxgi=n" xvfb-run -a wine ...)
