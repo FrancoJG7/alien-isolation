@@ -27,7 +27,7 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "palanca v0.2.0"
+#define VERSION "palanca v0.2.1"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -56,13 +56,14 @@ static int g_accion = 12;
 static unsigned g_tecla_ini;        /* 0 = la del mapa del juego */
 static int g_mano = 2;              /* 0 izquierda, 1 derecha, 2 cualquiera */
 static int g_boton = -1;            /* -1 sin botón (armado por usar), 0 agarre, 1 A/X, 2 gatillo */
-static float g_paso = 0.04f;        /* m hacia abajo por cada toque */
+static float g_paso = 0.03f;        /* m hacia abajo por cada toque */
 static float g_velocidad = 0.25f;   /* m/s hacia abajo para que cuente */
-static int g_max_toques = 12;       /* por vez que se arma (o por agarre) */
+static int g_max_toques = 8;        /* por vez que se arma (o por agarre) */
 static float g_entre = 0.06f;       /* s suelta entre un toque y el siguiente */
 static float g_ventana = 8.0f;      /* s armado después de usar */
 static float g_gracia = 0.8f;       /* s del principio que no cuentan */
 #define ACCION_USAR 12
+#define PROPIO_SEG  0.35f
 static float g_mantener = 0.06f;
 static int g_descubrir = 1;
 static int g_vibrar = 1;
@@ -70,7 +71,7 @@ static int g_log = 1;
 
 /* Estado */
 static unsigned g_tecla;
-static float g_t_tecla = 10.0f, g_t_mandos = 10.0f, g_toque, g_suelta;
+static float g_t_tecla = 10.0f, g_t_mandos = 10.0f, g_toque, g_suelta = 10.0f;
 static int g_pendientes, g_hechos, g_mano_activa = -1;
 static unsigned char g_estado_antes[MAX_ACCIONES];
 static float g_armado = -1.0f;      /* s desde el último usar; < 0 = no */
@@ -243,7 +244,9 @@ static void f_tick(float dt)
     if (g_boton < 0) {
         int st = tv_estado(g_delta, ACCION_USAR);
         if (st >= 0) {
-            if ((st & 1) && !(g_usar_antes & 1) && g_toque <= 0.0f) {
+            /* Nuestra propia tecla llega al juego con atraso: un usar hasta
+             * PROPIO_SEG después del último toque es nuestro, no arma. */
+            if ((st & 1) && !(g_usar_antes & 1) && g_toque <= 0.0f && g_suelta > PROPIO_SEG && g_pendientes == 0) {
                 if (g_hechos)
                     logf_("palanca: %d toques con la mano %s", g_hechos, g_mano_activa ? "derecha" : "izquierda");
                 g_armado = 0.0f;
@@ -366,9 +369,9 @@ static void f_config(void)
     if (g_mano < 0 || g_mano > 2)
         g_mano = 2;
     g_boton = GetPrivateProfileIntA("Palanca", "Boton", -1, ruta);
-    g_paso = leer_float("Paso", 0.04f, 0.01f, 0.5f);
+    g_paso = leer_float("Paso", 0.03f, 0.01f, 0.5f);
     g_velocidad = leer_float("Velocidad", 0.25f, 0.0f, 5.0f);
-    g_max_toques = GetPrivateProfileIntA("Palanca", "MaxToques", 12, ruta);
+    g_max_toques = GetPrivateProfileIntA("Palanca", "MaxToques", 8, ruta);
     g_entre = leer_float("Entre", 0.06f, 0.02f, 1.0f);
     g_ventana = leer_float("Ventana", 8.0f, 0.5f, 60.0f);
     g_gracia = leer_float("Gracia", 0.8f, 0.0f, 5.0f);
