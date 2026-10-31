@@ -1,0 +1,80 @@
+22:33:53.425 [dedos] dedos v0.1 (recarga 0)
+22:33:53.426 [dedos] ini: Activado=1 Boton=2 Angulo=70 AnguloPulgar=35 EjeDedos=z EjePulgar=x Velocidad=12 manos 0x20/0x30 SoloManosVacias=1
+22:33:53.426 [dedos] enganchada la funcion en 008255e0 (10 bytes)
+22:33:53.426 dedos cargada (al arrancar)
+22:34:14.701 [dedos] objeto en la mano: 00000000 (nada)
+22:34:14.701 [dedos] esqueleto de Ripley: 69 huesos
+22:34:14.701 [dedos]   hueso   0 (0x00)                              padre -1
+22:34:14.701 [dedos]   hueso   1 (0x01)                              padre 0
+22:34:14.701 [dedos]   hueso   2 (0x02)                              padre 1
+22:34:14.701 [dedos]   hueso   3 (0x03)                              padre 1
+22:34:14.701 [dedos]   hueso   4 (0x04)                              padre 3
+22:34:14.702 [dedos]   hueso   5 (0x05)                              padre 4
+22:34:14.702 [dedos]   hueso   6 (0x06)                              padre 4
+22:34:14.702 [dedos]   hueso   7 (0x07)                              padre 6
+22:34:14.702 [dedos]   hueso   8 (0x08)                              padre 6
+22:34:14.702 [dedos]   hueso   9 (0x09)                              padre 6
+22:34:14.702 [dedos]   hueso  10 (0x0a)                              padre 9
+22:34:14.702 [dedos]   hueso  11 (0x0b)                              padre 10
+22:34:14.702 [dedos]   hueso  12 (0x0c)                              padre 11
+22:34:14.702 [dedos]   hueso  13 (0x0d)                              padre 9
+22:34:14.702 [dedos]   hueso  14 (0x0e)                              padre 13
+22:34:14.702 [dedos]   hueso  15 (0x0f)                              padre 14
+22:34:14.702 [dedos]   hueso  16 (0x10)                              padre 9
+22:34:14.702 [dedos]   hueso  17 (0x11)                              padre 16
+22:34:14.702 [dedos]   hueso  18 (0x12)                              padre 17
+22:34:14.702 [dedos]   hueso  19 (0x13)                              padre 9
+22:34:14.702 [dedos]   hueso  20 (0x14)                              padre 19
+22:34:14.702 [dedos]   hueso  21 (0x15)                              padre 20
+22:34:14.702 [dedos]   hueso  22 (0x16)                              padre 9
+22:34:14.702 [dedos]   hueso  23 (0x17)                              padre 22
+22:34:14.702 [dedos]   hueso  24 (0x18)                              padre 23
+22:34:14.702 [dedos]   hueso  25 (0x19)                              padre 9
+22:34:14.702 [dedos]   hueso  26 (0x1a)                              padre 1
+22:34:14.702 [dedos]   hueso  27 (0x1b)                              padre 26
+22:34:14.702 [dedos]   hueso  28 (0x1c)                              padre 27
+22:34:14.702 [dedos]   hueso  29 (0x1d)                              padre 27
+22:34:14.702 [dedos]   hueso  30 (0x1e)                              padre 29
+22:34:14.702 [dedos]   hueso  31 (0x1f)                              padre 29
+22:34:14.702 [dedos]   hueso  32 (0x20)                              padre 29
+22:34:14.702 [dedos]   hueso  33 (0x21)                              padre 32
+22:34:14.702 [dedos]   hueso  34 (0x22)                              padre 33
+22:34:14.702 [dedos]   hueso  35 (0x23)                              padre 34
+22:34:14.702 [dedos]   hueso  36 (0x24)                              padre 32
+22:34:14.702 [dedos]   hueso  37 (0x25)                              padre 36
+22:34:14.702 [dedos]   hueso  38 (0x26)                              padre 37
+22:34:14.702 [dedos]   hueso  39 (0x27)                              padre 32
+22:34:14.702 [dedos]   hueso  40 (0x28)                              padre 39
+22:34:14.702 [dedos]   hueso  41 (0x29)                              padre 40
+22:34:14.702 [dedos]   hueso  42 (0x2a)                              padre 32
+22:34:14.702 [dedos]   hueso  43 (0x2b)                              padre 42
+22:34:14.702 [dedos]   hueso  44 (0x2c)                              padre 43
+22:34:14.702 [dedos]   hueso  45 (0x2d)                              padre 32
+22:34:14.702 [dedos]   hueso  46 (0x2e)                              padre 45
+22:34:14.702 [dedos]   hueso  47 (0x2f)                              padre 46
+22:34:14.702 [dedos]   hueso  48 (0x30)                              padre 32
+22:34:14.702 [dedos]   hueso  49 (0x31)                              padre 0
+22:34:14.702 [dedos]   hueso  50 (0x32)                              padre 49
+22:34:14.702 [dedos]   hueso  51 (0x33)                              padre 50
+22:34:14.702 [dedos]   hueso  52 (0x34)                              padre 51
+22:34:14.702 [dedos]   hueso  53 (0x35)                              padre 52
+22:34:14.702 [dedos]   hueso  54 (0x36)                              padre 53
+22:34:14.702 [dedos]   hueso  55 (0x37)                              padre 50
+22:34:14.702 [dedos]   hueso  56 (0x38)                              padre 55
+22:34:14.702 [dedos]   hueso  57 (0x39)                              padre 56
+22:34:14.702 [dedos]   hueso  58 (0x3a)                              padre 57
+22:34:14.702 [dedos]   hueso  59 (0x3b)                              padre 49
+22:34:14.702 [dedos]   hueso  60 (0x3c)                              padre 59
+22:34:14.702 [dedos]   hueso  61 (0x3d)                              padre 60
+22:34:14.702 [dedos]   hueso  62 (0x3e)                              padre 61
+22:34:14.702 [dedos]   hueso  63 (0x3f)                              padre 62
+22:34:14.702 [dedos]   hueso  64 (0x40)                              padre 0
+22:34:14.702 [dedos]   hueso  65 (0x41)                              padre 0
+22:34:14.702 [dedos]   hueso  66 (0x42)                              padre 0
+22:34:14.702 [dedos]   hueso  67 (0x43)                              padre 0
+22:34:14.702 [dedos]   hueso  68 (0x44)                              padre 0
+22:34:14.702 [dedos] mano izquierda = hueso 0x20 , 16 dedos (todo lo que cuelga):                
+22:34:14.702 [dedos] mano derecha = hueso 0x30 , 0 dedos (todo lo que cuelga):
+22:34:19.667 [dedos] cierre izq 1.00 der 0.00
+22:34:24.667 [dedos] cierre izq 0.79 der 0.00
+22:34:29.669 [dedos] cierre izq 0.07 der 0.00
