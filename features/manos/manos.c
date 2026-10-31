@@ -27,6 +27,14 @@
  * computadora y Ripley la usa. Si el juego no muestra la indicación de usar,
  * la tecla no hace nada. Una vez cada UsarCada segundos como máximo.
  *
+ * Desde la v0.8.1, el toque se suelta antes (SoltarToque, 0.985 en vez de
+ * 0.995), también si la mano retrocede un poco aunque siga cerca de algo
+ * (SoltarRetroceso) y, si se pide, por tiempo (ToqueMax). Con el brazo
+ * arriba la mano queda casi siempre pegada al mueble y antes no volvía a
+ * disparar. El log anota cada disparo y cada empujón que no disparó, con el
+ * motivo, f y la altura de la mano respecto de los ojos (sin tope, como
+ * mucho una línea cada 0.5 s para los que no disparan).
+ *
  * Direcciones: AI.exe de Steam sin rebasar, MotherVR 0.8.1 (dxgi.dll) como
  * desplazamiento desde su base. Ver ideas_gameplay/ANALISIS_MANOS.md y
  * agachar/NOTAS.md (manos v0.1 a v0.5). */
@@ -38,7 +46,7 @@
 #include "vibrar.h"
 
 #ifndef VERSION
-#define VERSION "manos v0.8"
+#define VERSION "manos v0.8.1"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u   /* global: manager de personajes */
@@ -104,6 +112,11 @@ static float g_vibrar_cada = 0.5f;
 /* Pared al tacto: la mano está tocando (con histéresis) y cuánto hace que vibró. */
 static int g_tocando[2];
 static float g_desde_toque[2] = { 10.0f, 10.0f };
+static float g_f_min[2];            /* f más bajo desde que empezó el toque */
+static float g_tocando_seg[2];      /* cuánto hace que está tocando */
+static float g_soltar = 0.985f;
+static float g_soltar_retroceso = 0.04f;
+static float g_toque_max;           /* segundos; 0 = no se suelta por tiempo */
 static int g_toques[2], g_pulsos_log;
 
 static float g_desde[4] __attribute__((aligned(16)));
@@ -246,7 +259,6 @@ static int g_usar_al_tocar = 1;
 static unsigned g_tecla_usar = 0x12;        /* E */
 static float g_usar_cada = 1.0f;
 static float g_desde_usar = 10.0f, g_tecla_abajo;
-static int g_usos_log;
 
 static int juego_con_foco(void)
 {
@@ -268,18 +280,41 @@ static void tecla_usar(int abajo)
     SendInput(1, &in, sizeof in);
 }
 
-/* La mano tocó algo: apretar usar (el juego decide si hay qué usar). */
-static void usar_al_tocar(int i)
+/* Para el log de cada intento: altura de la mano respecto de los ojos (m) y
+ * hacia dónde miran la cabeza, la cámara del juego y el mando (grados, + arriba). */
+typedef struct {
+    float altura, pitch_cabeza, pitch_camara, pitch_mano;
+} Intento;
+static float g_desde_log_no = 10.0f;
+
+static void log_intento(int i, const char *que, float f, const Intento *in)
 {
-    if (!g_usar_al_tocar || g_desde_usar < g_usar_cada || g_tecla_abajo > 0.0f || !juego_con_foco())
+    g_host->log(g_host, "mano %s: %s (f %.3f, mano %+.2f m de los ojos, cabeza %+.0f, camara %+.0f, mando %+.0f grados)",
+                i ? "derecha" : "izquierda", que, f, in->altura, in->pitch_cabeza, in->pitch_camara, in->pitch_mano);
+}
+
+/* La mano tocó algo: apretar usar (el juego decide si hay qué usar). */
+static void usar_al_tocar(int i, float f, const Intento *in)
+{
+    const char *motivo = NULL;
+    if (!g_usar_al_tocar)
         return;
+    if (g_desde_usar < g_usar_cada || g_tecla_abajo > 0.0f)
+        motivo = "no aprieto usar (UsarCada)";
+    else if (!juego_con_foco())
+        motivo = "no aprieto usar (el juego no tiene el foco)";
+    if (motivo) {
+        if (g_log && g_desde_log_no >= 0.5f) {
+            g_desde_log_no = 0.0f;
+            log_intento(i, motivo, f, in);
+        }
+        return;
+    }
     tecla_usar(1);
     g_tecla_abajo = 0.12f;
     g_desde_usar = 0.0f;
-    if (g_log && g_usos_log < 20) {
-        g_usos_log++;
-        g_host->log(g_host, "la mano %s toco algo: aprieto usar", i ? "derecha" : "izquierda");
-    }
+    if (g_log)
+        log_intento(i, "toco algo, aprieto usar", f, in);
 }
 
 static void tick_usar(float dt)
@@ -292,18 +327,30 @@ static void tick_usar(float dt)
     }
 }
 
-static void tocar_pared(int i, float f)
+static void tocar_pared(int i, float f, const Intento *in)
 {
     if (!g_tocando[i] && f < 0.97f) {
         g_tocando[i] = 1;
-        usar_al_tocar(i);
+        g_f_min[i] = f;
+        g_tocando_seg[i] = 0.0f;
+        usar_al_tocar(i, f, in);
         if (g_vibrar && g_desde_toque[i] >= g_vibrar_cada) {
             vibrar_pedir(i, 1, g_vibrar_ms, 0.0f, g_vibrar_fuerza);
             g_desde_toque[i] = 0.0f;
             g_toques[i]++;
         }
-    } else if (g_tocando[i] && f > 0.995f) {
-        g_tocando[i] = 0;
+    } else if (g_tocando[i]) {
+        if (f > g_soltar || f > g_f_min[i] + g_soltar_retroceso ||
+            (g_toque_max > 0.0f && g_tocando_seg[i] >= g_toque_max)) {
+            g_tocando[i] = 0;
+        } else if (f < g_f_min[i] - 0.03f) {
+            /* empuja más contra lo mismo sin haberse soltado: no dispara */
+            g_f_min[i] = f;
+            if (g_usar_al_tocar && g_log && g_desde_log_no >= 0.5f) {
+                g_desde_log_no = 0.0f;
+                log_intento(i, "empuja pero sigue tocando desde antes, no aprieto usar", f, in);
+            }
+        }
     }
 }
 
@@ -396,7 +443,14 @@ static void calcular(void)
         }
 
         g_permitido[i] = f;
-        tocar_pared(i, f);
+        {
+            Intento in;
+            in.altura = v[1];
+            in.pitch_cabeza = asinf(fmaxf(-1.0f, fminf(1.0f, -visor[1][2]))) * 57.2958f;
+            in.pitch_camara = asinf(fmaxf(-1.0f, fminf(1.0f, ejes[2][1]))) * 57.2958f;
+            in.pitch_mano = asinf(fmaxf(-1.0f, fminf(1.0f, -mano[i][1][2]))) * 57.2958f;
+            tocar_pared(i, f, &in);
+        }
         if (f < 1.0f)
             g_cuadros_frenada[i]++;
         if (f < g_min_permitido[i])
@@ -453,6 +507,18 @@ static void leer_ini(void)
     g_usar_cada = (float)atof(buf);
     if (g_usar_cada < 0.1f || g_usar_cada > 10.0f)
         g_usar_cada = 1.0f;
+    GetPrivateProfileStringA("Manos", "SoltarToque", "0.985", buf, sizeof buf, ruta);
+    g_soltar = (float)atof(buf);
+    if (g_soltar < 0.97f || g_soltar > 1.0f)
+        g_soltar = 0.985f;
+    GetPrivateProfileStringA("Manos", "SoltarRetroceso", "0.04", buf, sizeof buf, ruta);
+    g_soltar_retroceso = (float)atof(buf);
+    if (g_soltar_retroceso <= 0.0f || g_soltar_retroceso > 1.0f)
+        g_soltar_retroceso = 0.04f;
+    GetPrivateProfileStringA("Manos", "ToqueMax", "0", buf, sizeof buf, ruta);
+    g_toque_max = (float)atof(buf);
+    if (g_toque_max < 0.0f || g_toque_max > 30.0f)
+        g_toque_max = 0.0f;
     GetPrivateProfileStringA("Manos", "PruebaSubirDerecha", "0", buf, sizeof buf, ruta);
     g_subir_der = (float)atof(buf);
 }
@@ -467,6 +533,9 @@ static void f_tick(float dt)
     }
     g_desde_toque[0] += dt;
     g_desde_toque[1] += dt;
+    g_tocando_seg[0] += dt;
+    g_tocando_seg[1] += dt;
+    g_desde_log_no += dt;
     tick_usar(dt);
     calcular();
     if (vibrar_tick(g_host->openvr(), dt) && g_log && g_pulsos_log < 3) {
@@ -498,6 +567,8 @@ static void f_config(void)
                 g_activado, g_margen, g_radio, g_adelante, g_escala, g_filtro, g_log, g_intervalo, g_subir_der);
     g_host->log(g_host, "ini: Vibrar=%d VibrarMs=%.0f VibrarFuerza=%.2f VibrarCada=%.1f UsarAlTocar=%d Tecla=%02x UsarCada=%.1f",
                 g_vibrar, g_vibrar_ms, g_vibrar_fuerza, g_vibrar_cada, g_usar_al_tocar, g_tecla_usar, g_usar_cada);
+    g_host->log(g_host, "ini: SoltarToque=%.3f SoltarRetroceso=%.2f ToqueMax=%.1f",
+                g_soltar, g_soltar_retroceso, g_toque_max);
 }
 
 static void f_pausa(int pausado)
