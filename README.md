@@ -25,7 +25,7 @@ Hace falta `i686-w64-mingw32-gcc` (en Windows: MSYS2 con `mingw-w64-i686-gcc`).
 ```
 ./compilar.sh            # todo
 ./compilar.sh dedos      # solo una feature
-./instalar.sh            # copia las DLL a mods_vr (los .ini solo si no existen)
+./instalar.sh dedos      # copia esa DLL a mods_vr (guarda la vieja con su version; los .ini solo si no existen)
 ```
 
 Con el juego abierto, la feature nueva se recarga sola en un segundo. Todo queda anotado en `ai_mods.log`, en la carpeta del juego.

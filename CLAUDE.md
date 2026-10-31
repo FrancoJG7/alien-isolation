@@ -8,4 +8,4 @@
 - Cada cambio de versión: actualizar el `#define VERSION`, la fila de `VERSIONES.md` (con fecha y una línea de qué cambió) y hacer un commit que diga la versión.
 
 ## Compilar e instalar
-`./compilar.sh <feature>` y `./instalar.sh` (ver README.md). Los .ini de Franco no se pisan.
+`./compilar.sh <feature>` y `./instalar.sh <feature>` (ver README.md). Instalar siempre nombrando la feature: nunca todas juntas. Los .ini de Franco no se pisan.
