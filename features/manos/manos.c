@@ -46,7 +46,7 @@
 #include "vibrar.h"
 
 #ifndef VERSION
-#define VERSION "manos v0.8.1"
+#define VERSION "manos v0.8.2"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u   /* global: manager de personajes */
@@ -259,6 +259,25 @@ static int g_usar_al_tocar = 1;
 static unsigned g_tecla_usar = 0x12;        /* E */
 static float g_usar_cada = 1.0f;
 static float g_desde_usar = 10.0f, g_tecla_abajo;
+/* UsarEnLocker=0 (v0.8.2): escondida en el locker o en un ducto (pj+0x2b4,
+ * forzada a agacharse, la bandera de agachar y palanca) tocar la puerta no
+ * aprieta usar: al inclinarte las manos tocaban la puerta y te sacaba. */
+static int g_usar_en_locker = 0;
+#define OFS_FORZADO         0x2b4
+
+static int en_locker(void)
+{
+    unsigned m = (unsigned)(UINT_PTR)leer_ptr(DIR_MANAGER_PJ + g_delta), lista;
+    unsigned char *pj;
+    if (!m)
+        return 0;
+    m = (unsigned)(UINT_PTR)leer_ptr(m + 8);
+    if (!m || IsBadReadPtr((void *)(UINT_PTR)m, 0x88) || *(unsigned *)(UINT_PTR)(m + 0x84) == 0)
+        return 0;
+    lista = (unsigned)(UINT_PTR)leer_ptr(m + 0x80);
+    pj = lista ? (unsigned char *)leer_ptr(lista) : NULL;
+    return pj && !IsBadReadPtr(pj + OFS_FORZADO, 1) && pj[OFS_FORZADO];
+}
 
 static int juego_con_foco(void)
 {
@@ -303,6 +322,8 @@ static void usar_al_tocar(int i, float f, const Intento *in)
         motivo = "no aprieto usar (UsarCada)";
     else if (!juego_con_foco())
         motivo = "no aprieto usar (el juego no tiene el foco)";
+    else if (!g_usar_en_locker && en_locker())
+        motivo = "no aprieto usar (en el locker o en un ducto, UsarEnLocker=0)";
     if (motivo) {
         if (g_log && g_desde_log_no >= 0.5f) {
             g_desde_log_no = 0.0f;
@@ -499,6 +520,7 @@ static void leer_ini(void)
     if (g_vibrar_cada < 0.0f || g_vibrar_cada > 10.0f)
         g_vibrar_cada = 0.5f;
     g_usar_al_tocar = GetPrivateProfileIntA("Manos", "UsarAlTocar", 1, ruta);
+    g_usar_en_locker = GetPrivateProfileIntA("Manos", "UsarEnLocker", 0, ruta);
     GetPrivateProfileStringA("Manos", "Tecla", "12", buf, sizeof buf, ruta);
     g_tecla_usar = (unsigned)strtoul(buf, NULL, 16) & 0xff;
     if (!g_tecla_usar)
@@ -565,8 +587,8 @@ static void f_config(void)
         g_permitido[0] = g_permitido[1] = 1.0f;
     g_host->log(g_host, "ini: Activado=%d Margen=%.2f Radio=%.2f Adelante=%.2f Escala=%.2f Filtro=%u Log=%d Intervalo=%.1f PruebaSubirDerecha=%.2f",
                 g_activado, g_margen, g_radio, g_adelante, g_escala, g_filtro, g_log, g_intervalo, g_subir_der);
-    g_host->log(g_host, "ini: Vibrar=%d VibrarMs=%.0f VibrarFuerza=%.2f VibrarCada=%.1f UsarAlTocar=%d Tecla=%02x UsarCada=%.1f",
-                g_vibrar, g_vibrar_ms, g_vibrar_fuerza, g_vibrar_cada, g_usar_al_tocar, g_tecla_usar, g_usar_cada);
+    g_host->log(g_host, "ini: Vibrar=%d VibrarMs=%.0f VibrarFuerza=%.2f VibrarCada=%.1f UsarAlTocar=%d UsarEnLocker=%d Tecla=%02x UsarCada=%.1f",
+                g_vibrar, g_vibrar_ms, g_vibrar_fuerza, g_vibrar_cada, g_usar_al_tocar, g_usar_en_locker, g_tecla_usar, g_usar_cada);
     g_host->log(g_host, "ini: SoltarToque=%.3f SoltarRetroceso=%.2f ToqueMax=%.1f",
                 g_soltar, g_soltar_retroceso, g_toque_max);
 }
