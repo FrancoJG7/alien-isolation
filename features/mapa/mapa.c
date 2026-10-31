@@ -35,6 +35,8 @@
  * hacia adelante a más de 1 m/s) no abre por Calma segundos: al empujar con
  * la palma (usar.dll) el dorso de la mano izquierda queda mirando a la cara
  * y abría el mapa. Subir la muñeca hacia la cara no cuenta como empujón.
+ * Desde la v0.7.5 un tirón hacia abajo (más de CalmaBajando m/s, la palanca)
+ * también arranca la Calma.
  *
  * Desde la v0.7.2 el reloj además tiene que estar cerca del centro de la
  * vista (MiradaMax grados entre el frente del visor y la dirección
@@ -57,7 +59,7 @@
 #include "mapa_gesto.h"
 
 #ifndef VERSION
-#define VERSION "mapa v0.7.4"
+#define VERSION "mapa v0.7.5"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -94,6 +96,7 @@ static float g_margen_ang = 8.0f;
 static float g_vel_max = 0.6f;      /* m/s: más rápido no es mirar la hora */
 static float g_calma = 1.0f;        /* s quieta después de un movimiento rápido */
 static float g_t_calma;
+static float g_calma_bajando = 0.6f;    /* m/s hacia abajo que también arrancan la Calma; 0 = no */
 static float g_mirada_max = 30.0f;  /* grados del reloj al centro de la vista; 0 = sin límite */
 static float g_ult_ang, g_ult_dist, g_ult_rapidez, g_ult_mirada;    /* para el log de abrir */
 static int g_aviso_mirada;          /* ya anotamos que este gesto no abre por la mirada */
@@ -446,6 +449,11 @@ static void f_tick(float dt)
             if (g_log && g_t_calma <= 0.0f && g_calma > 0.0f)
                 logf_("empujon de la mano (%.2f m/s hacia adelante): no abro por %.1f s", adelante, g_calma);
             g_t_calma = g_calma;
+        } else if (g_calma_bajando > 0.0f && -v[1] > g_calma_bajando) {
+            /* tirón hacia abajo (la palanca): al terminar, el dorso queda mirando a la cara */
+            if (g_log && g_t_calma <= 0.0f && g_calma > 0.0f)
+                logf_("tiron de la mano (%.2f m/s hacia abajo): no abro por %.1f s", -v[1], g_calma);
+            g_t_calma = g_calma;
         } else if (g_t_calma > 0.0f) {
             g_t_calma -= dt;
         }
@@ -560,6 +568,9 @@ static void f_config(void)
     g_calma = leer_float("Calma", "1.0");
     if (g_calma < 0.0f || g_calma > 3.0f)
         g_calma = 1.0f;
+    g_calma_bajando = leer_float("CalmaBajando", "0.6");
+    if (g_calma_bajando < 0.0f || g_calma_bajando > 5.0f)
+        g_calma_bajando = 0.6f;
     g_margen_ang = leer_float("MargenAngulo", "8");
     if (g_margen_ang < 0.0f || g_margen_ang > 45.0f)
         g_margen_ang = 8.0f;
@@ -572,10 +583,10 @@ static void f_config(void)
         tv_apretar(0);
         g_abierto = 0;
     }
-    logf_("ini: Activado=%d Accion=%d Modo=%d Mano=%s Eje=%s%c Angulo=%.0f Distancia=%.2f Demora=%.2f CerrarSoloSiMenu=%d DemoraCerrar=%.2f MargenAngulo=%.0f VelocidadMax=%.2f Calma=%.2f MiradaMax=%.0f",
+    logf_("ini: Activado=%d Accion=%d Modo=%d Mano=%s Eje=%s%c Angulo=%.0f Distancia=%.2f Demora=%.2f CerrarSoloSiMenu=%d DemoraCerrar=%.2f MargenAngulo=%.0f VelocidadMax=%.2f Calma=%.2f CalmaBajando=%.2f MiradaMax=%.0f",
           g_activado, g_accion, g_modo, g_mano ? "derecha" : "izquierda", g_signo < 0 ? "-" : "+",
           "xyz"[g_eje], g_angulo, g_distancia, g_demora, g_cerrar_solo_menu, g_demora_cerrar, g_margen_ang, g_vel_max, g_calma,
-          g_mirada_max);
+          g_calma_bajando, g_mirada_max);
 }
 
 static void f_pausa(int pausado)
