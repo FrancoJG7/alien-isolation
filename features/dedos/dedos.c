@@ -26,7 +26,7 @@
 #include "vibrar.h"
 
 #ifndef VERSION
-#define VERSION "dedos v0.1"
+#define VERSION "dedos v0.1.1"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -69,7 +69,7 @@ static float g_angulo_pulgar = 35.0f;
 static int g_eje = 2, g_eje_pulgar = 0;   /* 0 x, 1 y, 2 z del hueso */
 static float g_signo = 1.0f, g_signo_pulgar = 1.0f;
 static float g_velocidad = 12.0f;   /* qué tan rápido sigue al botón (1/s) */
-static int g_hueso_mano[2] = { 0x20, 0x30 };  /* el izquierdo y el derecho se deciden por nombre */
+static int g_hueso_mano[2] = { 0x09, 0x20 };  /* izquierda, derecha (si los huesos tienen nombre, se decide por nombre) */
 static int g_solo_vacias = 1;
 static int g_log = 1;
 
@@ -193,6 +193,21 @@ static int cuelga_de(const Esqueleto *e, int hueso, int mano)
     return 0;
 }
 
+/* 1 si el hueso es parte de una cadena de dedo: o su padre no es la mano
+ * (segunda o tercera falange), o es hijo directo de la mano y tiene a su vez
+ * un hijo (primera falange). Deja afuera huesos sueltos colgados de la mano,
+ * como el punto donde se agarran los objetos (0x30 en Ripley). */
+static int en_cadena(const Esqueleto *e, int hueso, int mano)
+{
+    int i;
+    if (e->padres[hueso] != mano)
+        return 1;
+    for (i = 0; i < e->n; i++)
+        if (e->padres[i] == hueso)
+            return 1;
+    return 0;
+}
+
 /* 0 izquierda, 1 derecha, -1 no se sabe por el nombre. */
 static int lado(const char *nombre)
 {
@@ -239,7 +254,7 @@ static void preparar_dedos(void *pose, int nuevos[2], Dedo d[2][MAX_HUESOS_DEDO]
             const char *nb = nombre_hueso(&e, i);
             if (!cuelga_de(&e, i, h))
                 continue;
-            if (por_nombre ? !es_dedo(nb) : (contiene(nb, "weapon") || contiene(nb, "prop") || contiene(nb, "attach")))
+            if (por_nombre ? !es_dedo(nb) : (!en_cadena(&e, i, h) || contiene(nb, "weapon") || contiene(nb, "prop") || contiene(nb, "attach")))
                 continue;
             d[m][nuevos[m]].hueso = i;
             d[m][nuevos[m]].pulgar = contiene(nb, "thumb");
@@ -448,11 +463,11 @@ static void leer_ini(void)
     g_boton = GetPrivateProfileIntA("Dedos", "Boton", 2, ruta);
     g_angulo = leer_float(ruta, "Angulo", 70.0f, 0.0f, 120.0f);
     g_angulo_pulgar = leer_float(ruta, "AnguloPulgar", 35.0f, 0.0f, 120.0f);
-    g_eje = leer_eje(ruta, "EjeDedos", "z", &g_signo);
+    g_eje = leer_eje(ruta, "EjeDedos", "-z", &g_signo);
     g_eje_pulgar = leer_eje(ruta, "EjePulgar", "x", &g_signo_pulgar);
     g_velocidad = leer_float(ruta, "Velocidad", 12.0f, 1.0f, 60.0f);
-    g_hueso_mano[0] = GetPrivateProfileIntA("Dedos", "HuesoManoA", 0x20, ruta);
-    g_hueso_mano[1] = GetPrivateProfileIntA("Dedos", "HuesoManoB", 0x30, ruta);
+    g_hueso_mano[0] = GetPrivateProfileIntA("Dedos", "HuesoManoA", 0x09, ruta);
+    g_hueso_mano[1] = GetPrivateProfileIntA("Dedos", "HuesoManoB", 0x20, ruta);
     g_solo_vacias = GetPrivateProfileIntA("Dedos", "SoloManosVacias", 1, ruta);
     g_log = GetPrivateProfileIntA("Dedos", "Log", 1, ruta);
 }
