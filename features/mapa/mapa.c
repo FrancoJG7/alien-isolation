@@ -36,7 +36,8 @@
  * la palma (usar.dll) el dorso de la mano izquierda queda mirando a la cara
  * y abría el mapa. Subir la muñeca hacia la cara no cuenta como empujón.
  * Desde la v0.7.5 un tirón hacia abajo (más de CalmaBajando m/s, la palanca)
- * también arranca la Calma.
+ * también arranca la Calma. Desde la v0.7.6 no abre mientras palanca.dll
+ * deja AI_MODS_PALANCA=1 en el entorno del proceso (armada o tirando).
  *
  * Desde la v0.7.2 el reloj además tiene que estar cerca del centro de la
  * vista (MiradaMax grados entre el frente del visor y la dirección
@@ -59,7 +60,7 @@
 #include "mapa_gesto.h"
 
 #ifndef VERSION
-#define VERSION "mapa v0.7.5"
+#define VERSION "mapa v0.7.6"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -100,6 +101,7 @@ static float g_calma_bajando = 0.6f;    /* m/s hacia abajo que también arrancan
 static float g_mirada_max = 30.0f;  /* grados del reloj al centro de la vista; 0 = sin límite */
 static float g_ult_ang, g_ult_dist, g_ult_rapidez, g_ult_mirada;    /* para el log de abrir */
 static int g_aviso_mirada;          /* ya anotamos que este gesto no abre por la mirada */
+static int g_aviso_palanca;         /* ya anotamos que este gesto no abre por la palanca */
 static int g_vibrar = 1;
 static int g_log = 1, g_log_ejes = 1;
 static int g_stick = 1;
@@ -475,7 +477,17 @@ static void f_tick(float dt)
     }
 
     if (!g_abierto) {
+        char pal[4];
         g_t_mira = mira ? g_t_mira + dt : 0.0f;
+        if (g_t_mira >= g_demora && GetEnvironmentVariableA("AI_MODS_PALANCA", pal, sizeof pal) && pal[0] == '1') {
+            /* palanca.dll armada o tirando: el dorso de la mano queda a la cara sin querer */
+            if (g_log && !g_aviso_palanca)
+                logf_("palanca activa: no abro");
+            g_aviso_palanca = 1;
+            g_t_mira = 0.0f;
+        } else if (!mira) {
+            g_aviso_palanca = 0;
+        }
         if (g_t_mira >= g_demora && g_t_calma <= 0.0f) {
             libre = ripley_libre();
             g_t_mira = 0.0f;
