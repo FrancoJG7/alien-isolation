@@ -36,6 +36,13 @@
  * la palma (usar.dll) el dorso de la mano izquierda queda mirando a la cara
  * y abría el mapa. Subir la muñeca hacia la cara no cuenta como empujón.
  *
+ * Desde la v0.7.2 el reloj además tiene que estar cerca del centro de la
+ * vista (MiradaMax grados entre el frente del visor y la dirección
+ * visor->mando): hay que mirarlo de verdad. Al mirarse los dedos, el dorso
+ * de la mano izquierda queda hacia la cara pero en el borde de la vista, y
+ * abría el mapa sin querer. "abro el mapa" anota el ángulo del eje, la
+ * distancia, la velocidad de la mano y esos grados.
+ *
  * LogEjes=1 anota, con el mando cerca de la cara, los grados de cada eje del
  * mando hacia los ojos: si el gesto no se dispara, ahí se ve cuál eje usar. */
 #include <windows.h>
@@ -48,7 +55,7 @@
 #include "mapa_gesto.h"
 
 #ifndef VERSION
-#define VERSION "mapa v0.7.1"
+#define VERSION "mapa v0.7.2"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -85,6 +92,9 @@ static float g_margen_ang = 8.0f;
 static float g_vel_max = 0.6f;      /* m/s: más rápido no es mirar la hora */
 static float g_calma = 1.0f;        /* s quieta después de un movimiento rápido */
 static float g_t_calma;
+static float g_mirada_max = 30.0f;  /* grados del reloj al centro de la vista; 0 = sin límite */
+static float g_ult_ang, g_ult_dist, g_ult_rapidez, g_ult_mirada;    /* para el log de abrir */
+static int g_aviso_mirada;          /* ya anotamos que este gesto no abre por la mirada */
 static int g_vibrar = 1;
 static int g_log = 1, g_log_ejes = 1;
 static int g_stick = 1;
@@ -175,7 +185,8 @@ static void abrir(int libre)
         tocar();
     if (g_vibrar)
         vibrar_pedir(g_mano, 1, 30.0f, 0.0f, 0.6f);
-    logf_("abro el mapa (control libre %d)", libre);
+    logf_("abro el mapa (control libre %d): eje a %.0f grados, %.2f m, mano a %.2f m/s, reloj a %.0f grados del centro de la vista",
+          libre, g_ult_ang, g_ult_dist, g_ult_rapidez, g_ult_mirada);
 }
 
 static void cerrar(int libre, const char *por)
@@ -402,8 +413,31 @@ static void f_tick(float dt)
     dist = gesto_medir(p[0].m, p[idx].m, g_eje, g_signo, &ang);
     mira = dist < g_distancia && ang < g_angulo;
     {
+        /* Grados entre el frente del visor (-z) y la dirección visor->mando. */
+        float d[3], dn, c;
+        int j;
+        for (j = 0; j < 3; j++)
+            d[j] = p[idx].m[j][3] - p[0].m[j][3];
+        dn = sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        c = dn > 1e-3f ? -(d[0] * p[0].m[0][2] + d[1] * p[0].m[1][2] + d[2] * p[0].m[2][2]) / dn : 1.0f;
+        g_ult_mirada = acosf(fmaxf(-1.0f, fminf(1.0f, c))) * 57.2958f;
+    }
+    if (mira && g_mirada_max > 0.0f && g_ult_mirada > g_mirada_max) {
+        if (g_log && !g_aviso_mirada && !g_abierto && g_t_calma <= 0.0f) {
+            g_aviso_mirada = 1;
+            logf_("dorso hacia la cara (eje a %.0f grados, %.2f m) pero el reloj esta a %.0f grados del centro de la vista: no abro",
+                  ang, dist, g_ult_mirada);
+        }
+        mira = 0;
+    } else if (!mira) {
+        g_aviso_mirada = 0;
+    }
+    g_ult_ang = ang;
+    g_ult_dist = dist;
+    {
         const float *v = p[idx].vel;
         float rapidez = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+        g_ult_rapidez = rapidez;
         float fx = -p[0].m[0][2], fz = -p[0].m[2][2], fn = sqrtf(fx * fx + fz * fz);
         float adelante = fn > 1e-3f ? (v[0] * fx + v[2] * fz) / fn : 0.0f;
         if (adelante > 1.0f) {
@@ -527,15 +561,19 @@ static void f_config(void)
     g_margen_ang = leer_float("MargenAngulo", "8");
     if (g_margen_ang < 0.0f || g_margen_ang > 45.0f)
         g_margen_ang = 8.0f;
+    g_mirada_max = leer_float("MiradaMax", "30");
+    if (g_mirada_max < 0.0f || g_mirada_max > 90.0f)
+        g_mirada_max = 30.0f;
     if (g_accion != accion_antes && g_tv == 1)
         g_tv = 0;                   /* otra acción: volver a buscar sus teclas */
     if (!g_activado && g_abierto && g_modo == 1) {
         tv_apretar(0);
         g_abierto = 0;
     }
-    logf_("ini: Activado=%d Accion=%d Modo=%d Mano=%s Eje=%s%c Angulo=%.0f Distancia=%.2f Demora=%.2f CerrarSoloSiMenu=%d DemoraCerrar=%.2f MargenAngulo=%.0f VelocidadMax=%.2f Calma=%.2f",
+    logf_("ini: Activado=%d Accion=%d Modo=%d Mano=%s Eje=%s%c Angulo=%.0f Distancia=%.2f Demora=%.2f CerrarSoloSiMenu=%d DemoraCerrar=%.2f MargenAngulo=%.0f VelocidadMax=%.2f Calma=%.2f MiradaMax=%.0f",
           g_activado, g_accion, g_modo, g_mano ? "derecha" : "izquierda", g_signo < 0 ? "-" : "+",
-          "xyz"[g_eje], g_angulo, g_distancia, g_demora, g_cerrar_solo_menu, g_demora_cerrar, g_margen_ang, g_vel_max, g_calma);
+          "xyz"[g_eje], g_angulo, g_distancia, g_demora, g_cerrar_solo_menu, g_demora_cerrar, g_margen_ang, g_vel_max, g_calma,
+          g_mirada_max);
 }
 
 static void f_pausa(int pausado)
