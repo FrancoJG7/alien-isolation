@@ -13,6 +13,6 @@ Regla: ver CLAUDE.md. Siempre partir del último número de esta tabla.
 | dedos | v0.1.4 | 31/10/2026 | AnguloPulgarIzq/Der y ejes como mezcla (y-0.4z) para inclinar el giro |
 | pisadas | v0.1.0 | 31/10/2026 | Los pasos del alien en los mandos (nueva) |
 | bengala | v0.1.2 | 31/10/2026 | Radio de vuelta en 0.15 (Franco: un poco de friccion esta bien) |
-| palanca | v0.3.1 | 31/10/2026 | Otro usar ya armada no corta el tiron; Gracia 0.4 y Recorrido 0.10 |
+| palanca | v0.3.2 | 31/10/2026 | Los toques ya no piden control libre (agarrada a la palanca, Ripley no lo esta) |
 
 La próxima de cada una sigue desde acá (por ejemplo dedos v0.1.1 o v0.2.0, nunca otra v0.1).

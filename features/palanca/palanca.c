@@ -29,11 +29,9 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "palanca v0.3.1"
+#define VERSION "palanca v0.3.2"
 #endif
 
-#define DIR_MANAGER_PJ      0x016f0c88u
-#define OFS_CONTROL         0x64
 #define SLOT_POSES          11
 #define MAX_DISPOSITIVOS    16
 #define MAX_ACCIONES        64
@@ -85,31 +83,6 @@ static struct {
 } g_m[2];
 
 #define logf_(...) do { if (g_log && g_host) g_host->log(g_host, __VA_ARGS__); } while (0)
-
-static void *leer_ptr(const void *dir)
-{
-    if (!dir || IsBadReadPtr(dir, 4))
-        return NULL;
-    return *(void *const *)dir;
-}
-
-static unsigned char *jugador(void)
-{
-    unsigned char *m = leer_ptr((void *)(UINT_PTR)(DIR_MANAGER_PJ + g_delta)), *lista;
-    if (!m)
-        return NULL;
-    m = leer_ptr(m + 8);
-    if (!m || IsBadReadPtr(m, 0x88) || *(unsigned *)(m + 0x84) == 0)
-        return NULL;
-    lista = leer_ptr(m + 0x80);
-    return lista ? leer_ptr(lista) : NULL;
-}
-
-static int ripley_libre(unsigned char *pj)
-{
-    unsigned char *ctl = pj ? leer_ptr(pj + OFS_CONTROL) : NULL;
-    return ctl && !IsBadReadPtr(ctl + 0x1f, 1) && ctl[0x1f];
-}
 
 static int juego_con_foco(void)
 {
@@ -183,12 +156,13 @@ static void descubrir(void)
     }
 }
 
-/* Un toque de la acción, si toca (lo llama tick cuando hay pendientes). */
+/* Un toque de la acción, si toca (lo llama tick cuando hay pendientes).
+ * Sin pedir control libre: agarrada a la palanca, Ripley está en su
+ * animación (fuera de control libre) justo cuando hay que machacar. */
 static void toque(void)
 {
-    if (!ripley_libre(jugador()) || !juego_con_foco()) {
-        logf_("palanca: %d toques pendientes, pero %s: no aprieto", g_pendientes,
-              !juego_con_foco() ? "el juego no tiene el foco" : "Ripley no esta en control libre");
+    if (!juego_con_foco()) {
+        logf_("palanca: %d toques pendientes, pero el juego no tiene el foco: no aprieto", g_pendientes);
         g_pendientes = 0;
         return;
     }
