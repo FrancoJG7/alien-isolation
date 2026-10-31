@@ -12,6 +12,6 @@ Regla: ver CLAUDE.md. Siempre partir del último número de esta tabla.
 | usar | v0.1.6 | 31/10/2026 | El empujón se mide también hacia donde mirás (cajones arriba y abajo) |
 | dedos | v0.1.4 | 31/10/2026 | AnguloPulgarIzq/Der y ejes como mezcla (y-0.4z) para inclinar el giro |
 | pisadas | v0.1.0 | 31/10/2026 | Los pasos del alien en los mandos (nueva) |
-| bengala | v0.1.1 | 31/10/2026 | Un solo raspon por bengala (prendida, la soltaba); Accion 16 y la bengala por defecto |
+| bengala | v0.1.2 | 31/10/2026 | Radio de vuelta en 0.15 (Franco: un poco de friccion esta bien) |
 
 La próxima de cada una sigue desde acá (por ejemplo dedos v0.1.1 o v0.2.0, nunca otra v0.1).

@@ -27,7 +27,7 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "bengala v0.1.1"
+#define VERSION "bengala v0.1.2"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -55,7 +55,7 @@ static int g_activado = 1;
 static int g_accion = 16;           /* recargar: la del botón B, que prende la bengala */
 static unsigned g_tecla_ini;        /* 0 = la del mapa del juego */
 static int g_mano = 1;              /* la que tiene la bengala: 0 izquierda, 1 derecha */
-static float g_radio = 0.22f;       /* m entre los dos mandos */
+static float g_radio = 0.15f;       /* m entre los dos mandos */
 static float g_velocidad = 0.8f;    /* m/s de una mano respecto de la otra */
 static float g_espera = 1.0f;
 static float g_mantener = 0.12f;
@@ -320,7 +320,7 @@ static void f_config(void)
     GetPrivateProfileStringA("Bengala", "Tecla", "0", buf, sizeof buf, ruta);
     g_tecla_ini = (unsigned)strtoul(buf, NULL, 16) & 0xff;
     g_mano = GetPrivateProfileIntA("Bengala", "Mano", 1, ruta) ? 1 : 0;
-    g_radio = leer_float("Radio", 0.22f, 0.03f, 0.6f);
+    g_radio = leer_float("Radio", 0.15f, 0.03f, 0.6f);
     g_velocidad = leer_float("Velocidad", 0.8f, 0.1f, 5.0f);
     g_espera = leer_float("Espera", 1.0f, 0.1f, 10.0f);
     g_mantener = leer_float("Mantener", 0.12f, 0.03f, 3.0f);
