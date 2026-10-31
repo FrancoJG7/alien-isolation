@@ -17,8 +17,9 @@
  *
  * Los huesos de Ripley no tienen nombre: cada dedo es una cadena de 3 huesos
  * que sale de la mano, y el pulgar es la cadena cuya base está más cerca de
- * la muñeca (o la que diga PulgarIzq / PulgarDer). La mano izquierda está en
- * espejo, así que por defecto dobla con el signo contrario a la derecha.
+ * la muñeca (o la que diga PulgarIzq / PulgarDer). Los dedos de la mano
+ * izquierda están en espejo, así que por defecto doblan con el signo
+ * contrario a la derecha; el pulgar no (en el juego dobla igual en las dos).
  *
  * Nada de esto está probado en el juego: el eje en el que se dobla cada dedo
  * no se sabe todavía (EjeDedos / EjePulgar en el .ini, se cambian en vivo). */
@@ -31,7 +32,7 @@
 #include "vibrar.h"
 
 #ifndef VERSION
-#define VERSION "dedos v0.1.2"
+#define VERSION "dedos v0.1.3"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -70,9 +71,9 @@ static FnHuesoLocal g_hueso_local;
 static int g_activado = 1;
 static int g_boton = 2;             /* 0 gatillo, 1 agarre, 2 el más apretado de los dos */
 static float g_angulo = 70.0f;      /* grados por articulación con la mano cerrada */
-static float g_angulo_pulgar = 35.0f;
-static int g_eje[2] = { 2, 2 }, g_eje_pulgar[2] = { 0, 0 };   /* por mano (0 izq, 1 der): 0 x, 1 y, 2 z del hueso */
-static float g_signo[2] = { 1.0f, -1.0f }, g_signo_pulgar[2] = { -1.0f, 1.0f };
+static float g_angulo_pulgar = 20.0f;
+static int g_eje[2] = { 2, 2 }, g_eje_pulgar[2] = { 1, 1 };   /* por mano (0 izq, 1 der): 0 x, 1 y, 2 z del hueso */
+static float g_signo[2] = { 1.0f, -1.0f }, g_signo_pulgar[2] = { 1.0f, 1.0f };
 static int g_pulgar_ini[2];         /* cadena del pulgar, 1 a 5 contando desde el hueso más bajo; 0 = sola, -1 = ninguna */
 static float g_velocidad = 12.0f;   /* qué tan rápido sigue al botón (1/s) */
 static int g_hueso_mano[2] = { 0x09, 0x20 };  /* izquierda, derecha (si los huesos tienen nombre, se decide por nombre) */
@@ -535,11 +536,12 @@ static void leer_ini(void)
     g_activado = GetPrivateProfileIntA("Dedos", "Activado", 1, ruta);
     g_boton = GetPrivateProfileIntA("Dedos", "Boton", 2, ruta);
     g_angulo = leer_float(ruta, "Angulo", 70.0f, 0.0f, 120.0f);
-    g_angulo_pulgar = leer_float(ruta, "AnguloPulgar", 35.0f, 0.0f, 120.0f);
-    /* EjeDedos / EjePulgar son de la mano derecha; la izquierda, si no tiene
-     * los suyos, usa el mismo eje con el signo al revés (está en espejo). */
+    g_angulo_pulgar = leer_float(ruta, "AnguloPulgar", 20.0f, 0.0f, 120.0f);
+    /* EjeDedos / EjePulgar son de la mano derecha. Si la izquierda no tiene
+     * los suyos, los dedos usan el mismo eje con el signo al revés (están en
+     * espejo) y el pulgar el mismo eje y el mismo signo. */
     g_eje[1] = leer_eje(ruta, "EjeDedos", "-z", &g_signo[1]);
-    g_eje_pulgar[1] = leer_eje(ruta, "EjePulgar", "x", &g_signo_pulgar[1]);
+    g_eje_pulgar[1] = leer_eje(ruta, "EjePulgar", "y", &g_signo_pulgar[1]);
     g_eje[0] = leer_eje(ruta, "EjeDedosIzq", "", &g_signo[0]);
     if (g_eje[0] < 0) {
         g_eje[0] = g_eje[1];
@@ -548,7 +550,7 @@ static void leer_ini(void)
     g_eje_pulgar[0] = leer_eje(ruta, "EjePulgarIzq", "", &g_signo_pulgar[0]);
     if (g_eje_pulgar[0] < 0) {
         g_eje_pulgar[0] = g_eje_pulgar[1];
-        g_signo_pulgar[0] = -g_signo_pulgar[1];
+        g_signo_pulgar[0] = g_signo_pulgar[1];
     }
     g_pulgar_ini[0] = GetPrivateProfileIntA("Dedos", "PulgarIzq", 0, ruta);
     g_pulgar_ini[1] = GetPrivateProfileIntA("Dedos", "PulgarDer", 0, ruta);
