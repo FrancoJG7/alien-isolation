@@ -12,7 +12,7 @@ Regla: ver CLAUDE.md. Siempre partir del último número de esta tabla.
 | usar | v0.1.7 | 31/10/2026 | Bajar la mano casi derecho (tirar de una palanca) ya no cuenta como empujon |
 | dedos | v0.1.4 | 31/10/2026 | AnguloPulgarIzq/Der y ejes como mezcla (y-0.4z) para inclinar el giro |
 | pisadas | v0.1.0 | 31/10/2026 | Los pasos del alien en los mandos (nueva) |
-| bengala | v0.1.2 | 31/10/2026 | Radio de vuelta en 0.15 (Franco: un poco de friccion esta bien) |
+| bengala | v0.2.0 | 31/10/2026 | Reconoce la bengala por su firma (+0x14 = a93e2201) y no por el puntero, que cambia en cada sesion del juego (por eso habia dejado de prender); anota raspones con otra cosa en la mano |
 | palanca | v0.4.1 | 31/10/2026 | Un tiron = una A (Toques 1, sin rafaga); se arma solo con Ripley agarrada |
 | botiquin | v0.2.0 | 31/10/2026 | Mantiene B mientras la mano siga en el cuello (suelta al curarte o al sacarla); reconoce el botiquin por su firma (+0x14, +0x28) y lo aprendido sobrevive a recargas |
 

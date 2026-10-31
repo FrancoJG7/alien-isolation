@@ -15,6 +15,14 @@
  * - qué valor da "objeto en la mano" con la bengala ([[pj+0x31c]+0x3c]+0x3bc8,
  *   el mismo que lee dedos.dll), para no apretar nada con otra cosa.
  *
+ * Cómo sabe que es la bengala: "objeto en la mano" es un puntero y cambia de
+ * una sesión del juego a otra (la v0.1 tenía fijo 25365124 y el 31/10 la
+ * bengala era 25488124: por eso dejó de prender). Desde la v0.2.0 la
+ * reconoce por Firma, el número que tiene adentro en +0x14 y que parece ser
+ * del tipo de objeto (a93e2201 en la bengala; el botiquín tiene 09e770e9).
+ * Objeto= sigue sirviendo para fijar uno de esta sesión. Volcar=1 anota los
+ * primeros bytes de cada objeto que agarrás.
+ *
  * Con la bengala ya prendida, la misma acción la suelta: por eso hay un solo
  * raspón por bengala (UnoPorBengala). Se vuelve a armar cuando el objeto en
  * la mano cambia (la tiraste y sacaste otra). */
@@ -27,7 +35,7 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "bengala v0.1.2"
+#define VERSION "bengala v0.2.0"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -59,7 +67,9 @@ static float g_radio = 0.15f;       /* m entre los dos mandos */
 static float g_velocidad = 0.8f;    /* m/s de una mano respecto de la otra */
 static float g_espera = 1.0f;
 static float g_mantener = 0.12f;
-static unsigned g_objeto = 0x25365124u;  /* "objeto en la mano" de la bengala; 0 = cualquiera */
+static unsigned g_objeto = 0;       /* "objeto en la mano" de la bengala en esta sesión (cambia); 0 = no se usa */
+static unsigned g_firma = 0xa93e2201u;  /* lo que tiene la bengala en +0x14; Objeto y Firma en 0 = cualquiera */
+static int g_volcar = 1;
 static int g_descubrir = 0;
 static int g_uno_por_bengala = 1;
 static int g_vibrar = 1;
@@ -73,6 +83,7 @@ static unsigned char g_estado_antes[MAX_ACCIONES];
 static float g_pico_vel, g_pico_dist = 9.0f;
 static int g_pico_activo;
 static int g_ya_prendio;            /* 1 = esta bengala ya se raspó */
+static float g_t_aviso;             /* para no llenar el log con raspones sin la bengala */
 
 #define logf_(...) do { if (g_log && g_host) g_host->log(g_host, __VA_ARGS__); } while (0)
 
@@ -110,6 +121,37 @@ static unsigned equipado(unsigned char *pj)
     if (!g || IsBadReadPtr(g + 0x3bc8, 4))
         return 0xfffffffeu;
     return *(unsigned *)(g + 0x3bc8);
+}
+
+/* El número de adentro del objeto en +0x14 (parece ser del tipo de objeto). */
+static int firma(unsigned eq, unsigned *f)
+{
+    const unsigned char *o = (const unsigned char *)(UINT_PTR)eq;
+    if (eq < 0x10000u || eq >= 0xfffffffeu || IsBadReadPtr(o, 0x18))
+        return 0;
+    *f = *(const unsigned *)(o + 0x14);
+    return 1;
+}
+
+static int es_bengala(unsigned eq)
+{
+    unsigned f;
+    if (eq == 0 || eq >= 0xfffffffeu)
+        return 0;
+    if (!g_objeto && !g_firma)
+        return 1;                   /* cualquier cosa en la mano */
+    if (g_objeto && eq == g_objeto)
+        return 1;
+    return g_firma && firma(eq, &f) && f == g_firma;
+}
+
+static void volcar(unsigned eq)
+{
+    const unsigned *o = (const unsigned *)(UINT_PTR)eq;
+    if (eq < 0x10000u || eq >= 0xfffffffeu || IsBadReadPtr(o, 0x30))
+        return;
+    logf_("objeto %08x por dentro: %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x %08x (firma +0x14: %08x)",
+          eq, o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7], o[8], o[9], o[10], o[11], o[5]);
 }
 
 static int juego_con_foco(void)
@@ -218,13 +260,18 @@ static void f_tick(float dt)
     }
     if (g_t_espera > 0.0f)
         g_t_espera -= dt;
+    if (g_t_aviso > 0.0f)
+        g_t_aviso -= dt;
     if (g_pausado || !g_activado)
         return;
 
     pj = jugador();
     eq = equipado(pj);
     if (eq != g_equipado_antes) {
-        logf_("objeto en la mano: %08x%s", eq, eq == 0 ? " (nada)" : eq >= 0xfffffffeu ? " (no se pudo leer)" : "");
+        logf_("objeto en la mano: %08x%s%s", eq, eq == 0 ? " (nada)" : eq >= 0xfffffffeu ? " (no se pudo leer)" : "",
+              es_bengala(eq) ? " (la bengala)" : "");
+        if (g_volcar)
+            volcar(eq);
         g_equipado_antes = eq;
         g_ya_prendio = 0;           /* otra cosa en la mano (u otra bengala) */
     }
@@ -255,10 +302,10 @@ static void f_tick(float dt)
     if (g_tecla == 0xffffffffu)
         return;
 
-    con_bengala = eq != 0 && eq < 0xfffffffeu && (!g_objeto || eq == g_objeto);
+    con_bengala = es_bengala(eq);
     ih = vibrar_indice(g_mano);
     il = vibrar_indice(1 - g_mano);
-    if (!con_bengala || ih <= 0 || il <= 0 || ih >= MAX_DISPOSITIVOS || il >= MAX_DISPOSITIVOS) {
+    if (eq == 0 || eq >= 0xfffffffeu || ih <= 0 || il <= 0 || ih >= MAX_DISPOSITIVOS || il >= MAX_DISPOSITIVOS) {
         g_pico_activo = 0;
         return;
     }
@@ -274,6 +321,19 @@ static void f_tick(float dt)
     d = sqrtf(d);
     v = sqrtf(v);
     libre = ripley_libre(pj);
+    if (!con_bengala) {
+        /* Con otra cosa en la mano no aprieta, pero si raspás lo anota con su
+         * firma: si la bengala cambió de número, sale acá. */
+        unsigned f = 0;
+        g_pico_activo = 0;
+        if (d < g_radio && v > g_velocidad && g_t_aviso <= 0.0f) {
+            g_t_aviso = 3.0f;
+            firma(eq, &f);
+            logf_("raspon (%.2f m/s a %.2f m), pero lo que tenes en la mano (%08x, firma %08x) no es la bengala (Objeto=%08x Firma=%08x): no aprieto",
+                  v, d, eq, f, g_objeto, g_firma);
+        }
+        return;
+    }
 
     /* Log de cada pasada cerca, para ajustar Radio y Velocidad. */
     if (d < g_radio * 1.5f && v > g_velocidad * 0.5f) {
@@ -324,8 +384,11 @@ static void f_config(void)
     g_velocidad = leer_float("Velocidad", 0.8f, 0.1f, 5.0f);
     g_espera = leer_float("Espera", 1.0f, 0.1f, 10.0f);
     g_mantener = leer_float("Mantener", 0.12f, 0.03f, 3.0f);
-    GetPrivateProfileStringA("Bengala", "Objeto", "25365124", buf, sizeof buf, ruta);
+    GetPrivateProfileStringA("Bengala", "Objeto", "0", buf, sizeof buf, ruta);
     g_objeto = (unsigned)strtoul(buf, NULL, 16);
+    GetPrivateProfileStringA("Bengala", "Firma", "a93e2201", buf, sizeof buf, ruta);
+    g_firma = (unsigned)strtoul(buf, NULL, 16);
+    g_volcar = GetPrivateProfileIntA("Bengala", "Volcar", 1, ruta);
     g_descubrir = GetPrivateProfileIntA("Bengala", "Descubrir", 0, ruta);
     g_uno_por_bengala = GetPrivateProfileIntA("Bengala", "UnoPorBengala", 1, ruta);
     g_vibrar = GetPrivateProfileIntA("Bengala", "Vibrar", 1, ruta);
@@ -338,9 +401,9 @@ static void f_config(void)
         g_tecla = 0;
         g_t_tecla = 10.0f;
     }
-    logf_("ini: Activado=%d Accion=%d Tecla=%02x Mano=%s Radio=%.2f Velocidad=%.2f Espera=%.1f Mantener=%.2f Objeto=%08x Descubrir=%d UnoPorBengala=%d",
+    logf_("ini: Activado=%d Accion=%d Tecla=%02x Mano=%s Radio=%.2f Velocidad=%.2f Espera=%.1f Mantener=%.2f Objeto=%08x Firma=%08x Descubrir=%d UnoPorBengala=%d",
           g_activado, g_accion, g_tecla_ini, g_mano ? "derecha" : "izquierda", g_radio, g_velocidad, g_espera,
-          g_mantener, g_objeto, g_descubrir, g_uno_por_bengala);
+          g_mantener, g_objeto, g_firma, g_descubrir, g_uno_por_bengala);
 }
 
 static void soltar(void)

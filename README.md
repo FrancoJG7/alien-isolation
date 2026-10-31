@@ -18,7 +18,7 @@ Mods de gameplay para jugar Alien: Isolation en VR con MotherVR y GRAND (versió
 | usar | v0.1.7 | Usar con un empujón de la palma |
 | dedos | v0.1.4 | Cerrar las manos con el gatillo o el agarre |
 | pisadas | v0.1.0 | Sentís los pasos del alien en los mandos |
-| bengala | v0.1.2 | Prender la bengala raspándola con la otra mano |
+| bengala | v0.2.0 | Prender la bengala raspándola con la otra mano |
 | palanca | v0.4.1 | Bajar palancas bajando la mano |
 | botiquin | v0.2.0 | Curarte llevándote el botiquín al cuello |
 
