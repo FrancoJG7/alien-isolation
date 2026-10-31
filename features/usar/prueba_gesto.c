@@ -90,6 +90,20 @@ int main(void)
         VER(a > 60.0f, "mirando arriba, de costado sigue sin valer");
     }
 
+    {
+        /* Mirando 50 grados hacia abajo: tirar de una palanca (casi vertical) no
+         * es empujón; empujar algo bajo (60 grados abajo) sí. */
+        float c = 0.643f, sn = 0.766f, vel_tiron[3] = { 0, -1.5f, -0.3f }, vel_bajo[3] = { 0, -1.3f, -0.75f };
+        memset(v, 0, sizeof v);
+        v[0][0] = 1; v[1][1] = c; v[2][1] = -sn; v[1][2] = sn; v[2][2] = c;
+        v[1][3] = 1.6f;
+        mano_en(m, 0.1f, 1.6f - 0.4f * sn, -0.4f * c);
+        usar_medir(v, m, vel_tiron, &f, &d, &a);
+        VER(a >= 89.0f, "tirar de una palanca hacia abajo no empuja");
+        usar_medir(v, m, vel_bajo, &f, &d, &a);
+        VER(a < 20.0f && f > 1.2f, "empujar algo bajo mirandolo vale");
+    }
+
     printf(fallas ? "%d fallas\n" : "ok\n", fallas);
     return fallas != 0;
 }

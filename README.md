@@ -15,7 +15,7 @@ Mods de gameplay para jugar Alien: Isolation en VR con MotherVR y GRAND (versió
 | manos | v0.8 | Las manos no atraviesan paredes y vibran al tocar |
 | mapa | v0.7.1 | Mapa en la muñeca, con el stick derecho |
 | pausa | v0.1 | Pausa al sacarte el visor |
-| usar | v0.1.6 | Usar con un empujón de la palma |
+| usar | v0.1.7 | Usar con un empujón de la palma |
 | dedos | v0.1.4 | Cerrar las manos con el gatillo o el agarre |
 | pisadas | v0.1.0 | Sentís los pasos del alien en los mandos |
 | bengala | v0.1.2 | Prender la bengala raspándola con la otra mano |

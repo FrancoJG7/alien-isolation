@@ -48,6 +48,10 @@ static void medir_mirada(const float visor[3][4], const float mano[3][4], const 
     /* Mirando casi al frente, la mano que cae no es un empujón. */
     if (fabsf(f[1]) < 0.5f && fabsf(vel[1]) > 2.0f * *hacia_frente)
         *angulo = 90.0f;
+    /* Bajar la mano casi derecho (tirar de una palanca mirándola) tampoco:
+     * empujar algo bajo siempre lleva algo de adelante. */
+    if (vel[1] < 0.0f && sqrtf(vel[0] * vel[0] + vel[2] * vel[2]) < 0.5f * -vel[1])
+        *angulo = 90.0f;
 }
 
 void usar_medir(const float visor[3][4], const float mano[3][4], const float vel[3],

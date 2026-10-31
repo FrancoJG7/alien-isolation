@@ -9,7 +9,7 @@ Regla: ver CLAUDE.md. Siempre partir del último número de esta tabla.
 | manos | v0.8 | 29/10/2026 | Usar al tocar (UsarAlTocar) |
 | mapa | v0.7.1 | 29/10/2026 | Calma solo después de un empujón |
 | pausa | v0.1 | 28/10/2026 | Pausa al sacarte el visor |
-| usar | v0.1.6 | 31/10/2026 | El empujón se mide también hacia donde mirás (cajones arriba y abajo) |
+| usar | v0.1.7 | 31/10/2026 | Bajar la mano casi derecho (tirar de una palanca) ya no cuenta como empujon |
 | dedos | v0.1.4 | 31/10/2026 | AnguloPulgarIzq/Der y ejes como mezcla (y-0.4z) para inclinar el giro |
 | pisadas | v0.1.0 | 31/10/2026 | Los pasos del alien en los mandos (nueva) |
 | bengala | v0.1.2 | 31/10/2026 | Radio de vuelta en 0.15 (Franco: un poco de friccion esta bien) |
