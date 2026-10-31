@@ -40,8 +40,9 @@
  * vista (MiradaMax grados entre el frente del visor y la dirección
  * visor->mando): hay que mirarlo de verdad. Al mirarse los dedos, el dorso
  * de la mano izquierda queda hacia la cara pero en el borde de la vista, y
- * abría el mapa sin querer. "abro el mapa" anota el ángulo del eje, la
- * distancia, la velocidad de la mano y esos grados.
+ * abría el mapa sin querer. En la v0.7.3 viene apagado (MiradaMax=0): se
+ * sentía tosco al mirar el reloj de verdad. "abro el mapa" anota el ángulo
+ * del eje, la distancia, la velocidad de la mano y esos grados.
  *
  * LogEjes=1 anota, con el mando cerca de la cara, los grados de cada eje del
  * mando hacia los ojos: si el gesto no se dispara, ahí se ve cuál eje usar. */
@@ -55,7 +56,7 @@
 #include "mapa_gesto.h"
 
 #ifndef VERSION
-#define VERSION "mapa v0.7.2"
+#define VERSION "mapa v0.7.3"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -92,7 +93,7 @@ static float g_margen_ang = 8.0f;
 static float g_vel_max = 0.6f;      /* m/s: más rápido no es mirar la hora */
 static float g_calma = 1.0f;        /* s quieta después de un movimiento rápido */
 static float g_t_calma;
-static float g_mirada_max = 30.0f;  /* grados del reloj al centro de la vista; 0 = sin límite */
+static float g_mirada_max;         /* grados del reloj al centro de la vista; 0 = sin límite */
 static float g_ult_ang, g_ult_dist, g_ult_rapidez, g_ult_mirada;    /* para el log de abrir */
 static int g_aviso_mirada;          /* ya anotamos que este gesto no abre por la mirada */
 static int g_vibrar = 1;
@@ -561,9 +562,9 @@ static void f_config(void)
     g_margen_ang = leer_float("MargenAngulo", "8");
     if (g_margen_ang < 0.0f || g_margen_ang > 45.0f)
         g_margen_ang = 8.0f;
-    g_mirada_max = leer_float("MiradaMax", "30");
+    g_mirada_max = leer_float("MiradaMax", "0");
     if (g_mirada_max < 0.0f || g_mirada_max > 90.0f)
-        g_mirada_max = 30.0f;
+        g_mirada_max = 0.0f;
     if (g_accion != accion_antes && g_tv == 1)
         g_tv = 0;                   /* otra acción: volver a buscar sus teclas */
     if (!g_activado && g_abierto && g_modo == 1) {
