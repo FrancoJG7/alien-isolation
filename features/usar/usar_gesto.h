@@ -19,7 +19,9 @@ typedef struct {
 
 /* Mide el cuadro: cuánto va la mano hacia el frente (m/s), cuánto está por
  * delante de los ojos (m) y el ángulo entre su movimiento y el frente. El
- * frente es hacia donde mira el visor, sin la altura. */
+ * frente es hacia donde mira el visor: con la altura (un cajón arriba o
+ * abajo, mirándolo) o sin ella (empujar hacia abajo mirando al frente); se
+ * queda con la que dé el empujón más derecho. */
 void usar_medir(const float visor[3][4], const float mano[3][4], const float vel[3],
                 float *hacia_frente, float *delante, float *angulo);
 

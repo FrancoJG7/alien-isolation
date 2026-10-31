@@ -72,6 +72,24 @@ int main(void)
         VER(a >= 89.0f, "casi todo hacia abajo no vale");
     }
 
+    {
+        /* Mirando 35 grados hacia arriba (o abajo) y empujando hacia donde mira. */
+        float c = 0.819f, sn = 0.574f, vel_arriba[3] = { 0, 1.0f * sn, -1.0f * c }, vel_abajo2[3] = { 0, -1.0f * sn, -1.0f * c };
+        memset(v, 0, sizeof v);
+        v[0][0] = 1; v[1][1] = c; v[2][1] = sn; v[1][2] = -sn; v[2][2] = c;   /* z del visor = (0, -sn, c): mira a (0, sn, -c) */
+        v[1][3] = 1.6f;
+        mano_en(m, 0.1f, 1.6f + 0.4f * sn, -0.4f * c);
+        usar_medir(v, m, vel_arriba, &f, &d, &a);
+        VER(f > 0.95f && d > 0.35f && a < 2.0f, "mirando arriba, empujar hacia arriba vale entero");
+        v[2][1] = -sn; v[1][2] = sn;
+        mano_en(m, 0.1f, 1.6f - 0.4f * sn, -0.4f * c);
+        usar_medir(v, m, vel_abajo2, &f, &d, &a);
+        VER(f > 0.95f && d > 0.35f && a < 2.0f, "mirando abajo, empujar hacia abajo vale entero");
+        v[2][1] = sn; v[1][2] = -sn;
+        usar_medir(v, m, vel_lado, &f, &d, &a);
+        VER(a > 60.0f, "mirando arriba, de costado sigue sin valer");
+    }
+
     printf(fallas ? "%d fallas\n" : "ok\n", fallas);
     return fallas != 0;
 }

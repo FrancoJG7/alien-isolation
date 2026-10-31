@@ -34,7 +34,7 @@
 #include "usar_gesto.h"
 
 #ifndef VERSION
-#define VERSION "usar v0.1.5"
+#define VERSION "usar v0.1.6"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
