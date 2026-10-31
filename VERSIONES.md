@@ -14,6 +14,6 @@ Regla: ver CLAUDE.md. Siempre partir del último número de esta tabla.
 | pisadas | v0.1.0 | 31/10/2026 | Los pasos del alien en los mandos (nueva) |
 | bengala | v0.1.2 | 31/10/2026 | Radio de vuelta en 0.15 (Franco: un poco de friccion esta bien) |
 | palanca | v0.4.1 | 31/10/2026 | Un tiron = una A (Toques 1, sin rafaga); se arma solo con Ripley agarrada |
-| botiquin | v0.1.0 | 31/10/2026 | Curarte llevandote el botiquin al cuello (nueva): aprieta B y aprende solo que objeto es el botiquin |
+| botiquin | v0.2.0 | 31/10/2026 | Mantiene B mientras la mano siga en el cuello (suelta al curarte o al sacarla); reconoce el botiquin por su firma (+0x14, +0x28) y lo aprendido sobrevive a recargas |
 
 La próxima de cada una sigue desde acá (por ejemplo dedos v0.1.1 o v0.2.0, nunca otra v0.1).

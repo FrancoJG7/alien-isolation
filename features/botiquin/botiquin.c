@@ -3,19 +3,22 @@
  * Con el botiquín en la mano de Ripley, llevás cualquiera de los dos mandos
  * al cuello (debajo del visor, entre Abajo y AbajoMax metros, y a menos de
  * Radio metros de él de costado) y lo dejás ahí Quieto segundos: el mod
- * aprieta la acción que usa el botiquín (la del botón B del mando, 16, la
- * misma que prende la bengala), como si fuera una inyección.
+ * mantiene apretada la acción que usa el botiquín (la del botón B del mando,
+ * 16, la misma que prende la bengala) mientras la mano siga en el cuello,
+ * como si fuera una inyección: la barra se llena y te curás. Suelta cuando
+ * la vida sube, cuando sacás la mano o a los MantenerMax segundos.
  *
  * Cómo aprieta: igual que bengala.dll, con la tecla de teclado que tenga esa
  * acción en el mapa del juego (SendInput), o la Tecla del .ini.
  *
  * Cómo sabe que lo que tenés en la mano es el botiquín: "objeto en la mano"
- * ([[pj+0x31c]+0x3c]+0x3bc8) tiene que ser Objeto. Ese valor puede cambiar
- * de una sesión del juego a otra (parece un puntero), así que además lo
- * aprende solo (Aprender=1): si apretás B con algo en la mano y en los
- * segundos siguientes la vida de Ripley sube, eso era el botiquín. Cuando
- * cambia el objeto en la mano, anota sus primeros bytes (Volcar=1) para
- * encontrar más adelante un número que no cambie.
+ * ([[pj+0x31c]+0x3c]+0x3bc8) tiene que ser Objeto, o tener adentro los
+ * mismos dos números (Firma, en +0x14 y +0x28) que parecen ser del tipo de
+ * objeto. Objeto parece un puntero y puede cambiar de una sesión del juego a
+ * otra, así que además lo aprende solo (Aprender=1): si apretás B con algo
+ * en la mano y en los segundos siguientes la vida de Ripley sube, eso era el
+ * botiquín (queda guardado en el proceso del juego hasta que lo cierres).
+ * Cuando cambia el objeto en la mano, anota sus primeros bytes (Volcar=1).
  *
  * Con la vida llena no aprieta (SoloSiFalta=1), para no gastar el botiquín. */
 #include <windows.h>
@@ -27,7 +30,7 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "botiquin v0.1.0"
+#define VERSION "botiquin v0.2.0"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -61,8 +64,9 @@ static float g_abajo_max = 0.35f;   /* m debajo del visor, máximo */
 static float g_radio = 0.20f;       /* m de costado (horizontal) desde el visor */
 static float g_quieto = 0.20f;      /* s con la mano en el cuello */
 static float g_espera = 3.0f;
-static float g_mantener = 0.15f;
+static float g_mantener_max = 8.0f;  /* s como mucho con B apretada */
 static unsigned g_objeto_ini;       /* 0 = todavía no se sabe */
+static unsigned g_firma_ini[2];     /* lo que tiene en +0x14 y +0x28 (0 = no se sabe) */
 static int g_aprender = 1;
 static float g_ventana = 8.0f;      /* s entre la B y la subida de la vida para aprender */
 static int g_solo_si_falta = 1;
@@ -72,9 +76,10 @@ static int g_log = 1;
 
 /* Estado */
 static unsigned g_tecla;
-static float g_t_tecla = 10.0f, g_t_mandos = 10.0f, g_t_espera, g_toque, g_t_cuello;
-static unsigned g_equipado_antes = 0xffffffffu, g_objeto_aprendido;
+static float g_t_tecla = 10.0f, g_t_mandos = 10.0f, g_t_espera, g_t_cuello, g_t_apretado;
+static unsigned g_equipado_antes = 0xffffffffu, g_objeto_aprendido, g_firma_aprendida[2];
 static int g_estado_b_antes, g_en_cuello, g_salio = 1, g_avise_sin_objeto;
+static int g_apretando, g_vida_subio, g_mano_apretando;
 static float g_t_desde_b = 99.0f;
 static unsigned g_objeto_b;         /* objeto en la mano cuando se apretó B */
 static int g_vida_antes = -1;
@@ -195,9 +200,63 @@ static int buscar_tecla(void)
     return 1;
 }
 
+/* Dos números de adentro del objeto (+0x14 y +0x28) que parecen ser del
+ * tipo de objeto y no de cada uno: otro botiquín tendría los mismos. */
+static int firma(unsigned eq, unsigned f[2])
+{
+    const unsigned char *o = (const unsigned char *)(UINT_PTR)eq;
+    if (eq < 0x10000u || eq >= 0xfffffffeu || IsBadReadPtr(o, 0x2c))
+        return 0;
+    f[0] = *(const unsigned *)(o + 0x14);
+    f[1] = *(const unsigned *)(o + 0x28);
+    return 1;
+}
+
+/* Lo aprendido se guarda en el proceso del juego (no en el .ini, porque
+ * cambia de una sesión a otra): así sobrevive a una recarga de la DLL. */
+static void guardar_aprendido(unsigned o)
+{
+    char buf[32];
+    snprintf(buf, sizeof buf, "%08x %08x %08x", o, g_firma_aprendida[0], g_firma_aprendida[1]);
+    SetEnvironmentVariableA("AI_MODS_BOTIQUIN", buf);
+}
+
+static void cargar_aprendido(void)
+{
+    char buf[32];
+    if (GetEnvironmentVariableA("AI_MODS_BOTIQUIN", buf, sizeof buf) > 0 &&
+        sscanf(buf, "%x %x %x", &g_objeto_aprendido, &g_firma_aprendida[0], &g_firma_aprendida[1]) >= 1)
+        logf_("el botiquin de esta sesion del juego ya estaba aprendido: %08x (firma %08x %08x)",
+              g_objeto_aprendido, g_firma_aprendida[0], g_firma_aprendida[1]);
+}
+
 static unsigned objeto(void)
 {
     return g_objeto_aprendido ? g_objeto_aprendido : g_objeto_ini;
+}
+
+static const unsigned *firma_buscada(void)
+{
+    if (g_firma_aprendida[0] || g_firma_aprendida[1])
+        return g_firma_aprendida;
+    return g_firma_ini[0] || g_firma_ini[1] ? g_firma_ini : NULL;
+}
+
+static int sabe_cual(void)
+{
+    return objeto() || firma_buscada();
+}
+
+/* 1 = es el botiquín: el mismo objeto, o uno con la misma firma. */
+static int es_botiquin(unsigned eq)
+{
+    const unsigned *fb = firma_buscada();
+    unsigned f[2];
+    if (eq == 0 || eq >= 0xfffffffeu)
+        return 0;
+    if (objeto() && eq == objeto())
+        return 1;
+    return fb && firma(eq, f) && f[0] == fb[0] && f[1] == fb[1];
 }
 
 /* Aprender: B con algo en la mano y después la vida sube = era el botiquín. */
@@ -217,18 +276,23 @@ static void aprender(unsigned char *pj, unsigned eq, float dt)
         return;
     if (g_vida_antes >= 0 && v != g_vida_antes)
         logf_("vida: %d -> %d", g_vida_antes, v);
+    if (g_vida_antes >= 0 && v > g_vida_antes)
+        g_vida_subio = 1;
     if (g_vida_antes >= 0 && v > g_vida_antes && g_t_desde_b < g_ventana) {
         if (g_aprender && g_objeto_b != 0 && g_objeto_b < 0xfffffffeu && g_objeto_b != objeto()) {
             g_objeto_aprendido = g_objeto_b;
-            logf_("aprendido: el botiquin es el objeto %08x (B %.1f s antes de curarte). Para el .ini: Objeto=%08x",
-                  g_objeto_b, g_t_desde_b, g_objeto_b);
+            if (!firma(g_objeto_b, g_firma_aprendida))
+                g_firma_aprendida[0] = g_firma_aprendida[1] = 0;
+            guardar_aprendido(g_objeto_b);
+            logf_("aprendido: el botiquin es el objeto %08x (B %.1f s antes de curarte). Para el .ini: Objeto=%08x Firma=%08x %08x",
+                  g_objeto_b, g_t_desde_b, g_objeto_b, g_firma_aprendida[0], g_firma_aprendida[1]);
         }
         g_t_desde_b = 99.0f;
     }
     g_vida_antes = v;
 }
 
-static void inyectar(unsigned char *pj, int mano)
+static void empezar(unsigned char *pj, int mano)
 {
     int llena = 0;
     if (!ripley_libre(pj) || !juego_con_foco()) {
@@ -241,12 +305,27 @@ static void inyectar(unsigned char *pj, int mano)
         return;
     }
     tecla(1);
-    g_toque = g_mantener;
-    g_t_espera = g_espera;
+    g_apretando = 1;
+    g_mano_apretando = mano;
+    g_t_apretado = 0.0f;
+    g_vida_subio = 0;
     if (g_vibrar)
-        vibrar_pedir(mano, 3, 20.0f, 60.0f, 0.7f);
-    logf_("mano %s en el cuello (%.2f m abajo, %.2f m de costado): uso el botiquin (accion %d)",
+        vibrar_pedir(mano, 1, 15.0f, 0.0f, 0.4f);
+    logf_("mano %s en el cuello (%.2f m abajo, %.2f m de costado): mantengo B (accion %d)",
           mano ? "derecha" : "izquierda", g_min_abajo, g_min_radio, g_accion);
+}
+
+/* Suelta B; por = por qué (para el log). */
+static void terminar_apretar(const char *por)
+{
+    if (!g_apretando)
+        return;
+    tecla(0);
+    g_apretando = 0;
+    g_t_espera = g_espera;
+    if (g_vibrar && g_vida_subio)
+        vibrar_pedir(g_mano_apretando, 3, 20.0f, 60.0f, 0.7f);
+    logf_("suelto B despues de %.1f s: %s", g_t_apretado, por);
 }
 
 static void f_tick(float dt)
@@ -259,27 +338,30 @@ static void f_tick(float dt)
 
     if (dt > 0.1f)
         dt = 0.1f;
-    if (g_toque > 0.0f) {
-        g_toque -= dt;
-        if (g_toque <= 0.0f)
-            tecla(0);
-    }
+    if (g_apretando)
+        g_t_apretado += dt;
     if (g_t_espera > 0.0f)
         g_t_espera -= dt;
-    if (g_pausado || !g_activado)
+    if (g_pausado || !g_activado) {
+        terminar_apretar(g_pausado ? "pausa" : "apagado");
         return;
+    }
 
     pj = jugador();
     eq = equipado(pj);
     if (eq != g_equipado_antes) {
         logf_("objeto en la mano: %08x%s%s", eq, eq == 0 ? " (nada)" : eq >= 0xfffffffeu ? " (no se pudo leer)" : "",
-              eq && eq == objeto() ? " (el botiquin)" : "");
+              es_botiquin(eq) ? " (el botiquin)" : "");
         if (g_volcar)
             volcar(eq);
         g_equipado_antes = eq;
         g_avise_sin_objeto = 0;
     }
     aprender(pj, eq, dt);
+    if (g_apretando && g_vida_subio)
+        terminar_apretar("te curaste");
+    if (g_apretando && g_t_apretado >= g_mantener_max)
+        terminar_apretar("MantenerMax");
 
     if (!(sys = g_host->openvr()))
         return;
@@ -305,12 +387,13 @@ static void f_tick(float dt)
     if (g_tecla == 0xffffffffu)
         return;
 
-    con_botiquin = eq != 0 && eq < 0xfffffffeu && objeto() && eq == objeto();
-    if (!objeto() && eq != 0 && eq < 0xfffffffeu && !g_avise_sin_objeto) {
+    con_botiquin = es_botiquin(eq);
+    if (!sabe_cual() && eq != 0 && eq < 0xfffffffeu && !g_avise_sin_objeto) {
         g_avise_sin_objeto = 1;
         logf_("todavia no se que objeto es el botiquin: usalo una vez con B (si la vida sube lo aprendo) o pone Objeto= en el .ini");
     }
     if (!con_botiquin) {
+        terminar_apretar("ya no tenes el botiquin en la mano");
         g_en_cuello = 0;
         g_min_radio = 9.0f;
         g_t_cuello = 0.0f;
@@ -319,8 +402,10 @@ static void f_tick(float dt)
 
     memset(p, 0, sizeof p);
     ((FnPoses)(*(void ***)sys)[SLOT_POSES])(sys, 2, 0.0f, p, MAX_DISPOSITIVOS);
-    if (!p[VISOR].valida || p[VISOR].resultado != 200)
+    if (!p[VISOR].valida || p[VISOR].resultado != 200) {
+        terminar_apretar("no veo el visor");
         return;
+    }
     for (mano = 0; mano < 2; mano++) {
         int i = vibrar_indice(mano);
         float dx, dz, abajo, costado;
@@ -350,15 +435,21 @@ static void f_tick(float dt)
         g_en_cuello = 0;
         g_min_radio = 9.0f;
     }
+    /* Mientras mantiene B, la mano puede moverse un poco (zona suelta). */
+    if (g_apretando) {
+        if (!cerca_suelto)
+            terminar_apretar("sacaste la mano del cuello");
+        return;
+    }
     if (!cerca) {
         g_t_cuello = 0.0f;
         g_salio = 1;
         return;
     }
     g_t_cuello += dt;
-    if (g_t_cuello >= g_quieto && g_salio && g_t_espera <= 0.0f && g_toque <= 0.0f) {
+    if (g_t_cuello >= g_quieto && g_salio && g_t_espera <= 0.0f) {
         g_salio = 0;                /* hasta que saques la mano del cuello */
-        inyectar(pj, mano_cerca);
+        empezar(pj, mano_cerca);
     }
 }
 
@@ -391,9 +482,12 @@ static void f_config(void)
     g_radio = leer_float("Radio", 0.20f, 0.03f, 0.6f);
     g_quieto = leer_float("Quieto", 0.20f, 0.0f, 3.0f);
     g_espera = leer_float("Espera", 3.0f, 0.1f, 30.0f);
-    g_mantener = leer_float("Mantener", 0.15f, 0.03f, 5.0f);
+    g_mantener_max = leer_float("MantenerMax", 8.0f, 0.5f, 30.0f);
     GetPrivateProfileStringA("Botiquin", "Objeto", "0", buf, sizeof buf, ruta);
     g_objeto_ini = (unsigned)strtoul(buf, NULL, 16);
+    GetPrivateProfileStringA("Botiquin", "Firma", "0 0", buf, sizeof buf, ruta);
+    g_firma_ini[0] = g_firma_ini[1] = 0;
+    sscanf(buf, "%x %x", &g_firma_ini[0], &g_firma_ini[1]);
     g_aprender = GetPrivateProfileIntA("Botiquin", "Aprender", 1, ruta);
     g_ventana = leer_float("Ventana", 8.0f, 1.0f, 30.0f);
     g_solo_si_falta = GetPrivateProfileIntA("Botiquin", "SoloSiFalta", 1, ruta);
@@ -401,23 +495,18 @@ static void f_config(void)
     g_vibrar = GetPrivateProfileIntA("Botiquin", "Vibrar", 1, ruta);
     g_log = GetPrivateProfileIntA("Botiquin", "Log", 1, ruta);
     if (g_accion != accion_antes || g_tecla_ini != tecla_antes) {
-        if (g_toque > 0.0f) {
-            tecla(0);
-            g_toque = 0.0f;
-        }
+        terminar_apretar("cambio la accion o la tecla");
         g_tecla = 0;
         g_t_tecla = 10.0f;
     }
-    logf_("ini: Activado=%d Accion=%d Tecla=%02x Mano=%d Abajo=%.2f AbajoMax=%.2f Radio=%.2f Quieto=%.2f Espera=%.1f Mantener=%.2f Objeto=%08x Aprender=%d SoloSiFalta=%d (objeto que uso: %08x)",
-          g_activado, g_accion, g_tecla_ini, g_mano, g_abajo, g_abajo_max, g_radio, g_quieto, g_espera, g_mantener,
-          g_objeto_ini, g_aprender, g_solo_si_falta, objeto());
+    logf_("ini: Activado=%d Accion=%d Tecla=%02x Mano=%d Abajo=%.2f AbajoMax=%.2f Radio=%.2f Quieto=%.2f Espera=%.1f MantenerMax=%.1f Objeto=%08x Firma=%08x %08x Aprender=%d SoloSiFalta=%d (objeto que uso: %08x)",
+          g_activado, g_accion, g_tecla_ini, g_mano, g_abajo, g_abajo_max, g_radio, g_quieto, g_espera, g_mantener_max,
+          g_objeto_ini, g_firma_ini[0], g_firma_ini[1], g_aprender, g_solo_si_falta, objeto());
 }
 
 static void soltar(void)
 {
-    if (g_toque > 0.0f)
-        tecla(0);
-    g_toque = 0.0f;
+    terminar_apretar("pausa o descarga");
     vibrar_cortar();
 }
 
@@ -441,6 +530,7 @@ __declspec(dllexport) int mod_iniciar(const Anfitrion *a, Feature *f)
     g_host = a;
     g_delta = a->delta;
     logf_(VERSION " (recarga %d)", a->recarga);
+    cargar_aprendido();
     f_config();
     f->tam = sizeof *f;
     f->prioridad = 67;
