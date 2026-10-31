@@ -29,7 +29,7 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "palanca v0.3.0"
+#define VERSION "palanca v0.3.1"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -58,13 +58,13 @@ static int g_accion = 12;
 static unsigned g_tecla_ini;        /* 0 = la del mapa del juego */
 static int g_mano = 2;              /* 0 izquierda, 1 derecha, 2 cualquiera */
 static int g_boton = -1;            /* -1 sin botón (armado por usar), 0 agarre, 1 A/X, 2 gatillo */
-static float g_recorrido = 0.12f;   /* m hacia abajo por tirón */
+static float g_recorrido = 0.10f;   /* m hacia abajo por tirón */
 static float g_velocidad = 0.4f;    /* m/s hacia abajo como mínimo */
 static int g_toques = 5;            /* toques por tirón */
 static int g_tirones = 3;           /* por vez que se arma (o por agarre) */
 static float g_entre = 0.12f;       /* s suelta entre un toque y el siguiente */
 static float g_ventana = 8.0f;      /* s armado después de usar */
-static float g_gracia = 0.8f;       /* s del principio que no cuentan */
+static float g_gracia = 0.4f;       /* s del principio que no cuentan */
 #define ACCION_USAR 12
 #define PROPIO_SEG  0.35f
 static float g_mantener = 0.1f;
@@ -251,11 +251,17 @@ static void f_tick(float dt)
             /* Nuestra propia tecla llega al juego con atraso: un usar hasta
              * PROPIO_SEG después del último toque es nuestro, no arma. */
             if ((st & 1) && !(g_usar_antes & 1) && g_toque <= 0.0f && g_suelta > PROPIO_SEG && g_pendientes == 0) {
-                if (g_hechos)
-                    logf_("palanca: %d toques con la mano %s", g_hechos, g_mano_activa ? "derecha" : "izquierda");
-                g_armado = 0.0f;
-                reiniciar();        /* empezar a medir de nuevo */
-                logf_("usar: palanca armada %.0f s", g_ventana);
+                if (g_armado >= 0.0f) {
+                    /* Ya estaba armada (otro empujón o la A): solo se
+                     * alarga, sin perder un tirón que estés haciendo. */
+                    if (g_armado > g_gracia)
+                        g_armado = g_gracia;
+                    g_tirones_hechos = 0;
+                } else {
+                    g_armado = 0.0f;
+                    reiniciar();    /* empezar a medir de nuevo */
+                    logf_("usar: palanca armada %.0f s", g_ventana);
+                }
             }
             g_usar_antes = st;
         }
@@ -264,6 +270,7 @@ static void f_tick(float dt)
             if (g_armado > g_ventana) {
                 g_armado = -1.0f;
                 logf_("palanca desarmada (pasaron %.0f s, %d toques)", g_ventana, g_hechos);
+                g_tirones_hechos = 0;
             }
         }
     }
@@ -369,13 +376,13 @@ static void f_config(void)
     if (g_mano < 0 || g_mano > 2)
         g_mano = 2;
     g_boton = GetPrivateProfileIntA("Palanca", "Boton", -1, ruta);
-    g_recorrido = leer_float("Recorrido", 0.12f, 0.03f, 0.8f);
+    g_recorrido = leer_float("Recorrido", 0.10f, 0.03f, 0.8f);
     g_velocidad = leer_float("Velocidad", 0.4f, 0.0f, 5.0f);
     g_toques = GetPrivateProfileIntA("Palanca", "Toques", 5, ruta);
     g_tirones = GetPrivateProfileIntA("Palanca", "Tirones", 3, ruta);
     g_entre = leer_float("Entre", 0.12f, 0.02f, 1.0f);
     g_ventana = leer_float("Ventana", 8.0f, 0.5f, 60.0f);
-    g_gracia = leer_float("Gracia", 0.8f, 0.0f, 5.0f);
+    g_gracia = leer_float("Gracia", 0.4f, 0.0f, 5.0f);
     g_mantener = leer_float("Mantener", 0.1f, 0.02f, 3.0f);
     g_descubrir = GetPrivateProfileIntA("Palanca", "Descubrir", 1, ruta);
     g_vibrar = GetPrivateProfileIntA("Palanca", "Vibrar", 1, ruta);
