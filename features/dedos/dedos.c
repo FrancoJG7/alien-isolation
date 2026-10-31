@@ -15,6 +15,11 @@
  * el log. Los nombres de los huesos se leen en tick y van al log una vez,
  * para saber cuáles son los dedos y cuál es el pulgar.
  *
+ * Los huesos de Ripley no tienen nombre: cada dedo es una cadena de 3 huesos
+ * que sale de la mano, y el pulgar es la cadena cuya base está más cerca de
+ * la muñeca (o la que diga PulgarIzq / PulgarDer). La mano izquierda está en
+ * espejo, así que por defecto dobla con el signo contrario a la derecha.
+ *
  * Nada de esto está probado en el juego: el eje en el que se dobla cada dedo
  * no se sabe todavía (EjeDedos / EjePulgar en el .ini, se cambian en vivo). */
 #include <windows.h>
@@ -26,7 +31,7 @@
 #include "vibrar.h"
 
 #ifndef VERSION
-#define VERSION "dedos v0.1.1"
+#define VERSION "dedos v0.1.2"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -66,8 +71,9 @@ static int g_activado = 1;
 static int g_boton = 2;             /* 0 gatillo, 1 agarre, 2 el más apretado de los dos */
 static float g_angulo = 70.0f;      /* grados por articulación con la mano cerrada */
 static float g_angulo_pulgar = 35.0f;
-static int g_eje = 2, g_eje_pulgar = 0;   /* 0 x, 1 y, 2 z del hueso */
-static float g_signo = 1.0f, g_signo_pulgar = 1.0f;
+static int g_eje[2] = { 2, 2 }, g_eje_pulgar[2] = { 0, 0 };   /* por mano (0 izq, 1 der): 0 x, 1 y, 2 z del hueso */
+static float g_signo[2] = { 1.0f, -1.0f }, g_signo_pulgar[2] = { -1.0f, 1.0f };
+static int g_pulgar_ini[2];         /* cadena del pulgar, 1 a 5 contando desde el hueso más bajo; 0 = sola, -1 = ninguna */
 static float g_velocidad = 12.0f;   /* qué tan rápido sigue al botón (1/s) */
 static int g_hueso_mano[2] = { 0x09, 0x20 };  /* izquierda, derecha (si los huesos tienen nombre, se decide por nombre) */
 static int g_solo_vacias = 1;
@@ -85,8 +91,8 @@ static struct {
     int n[2];
     Dedo d[2][MAX_HUESOS_DEDO];
     float cierre[2];                /* 0 abierta, 1 cerrada */
-    int eje, eje_pulgar;
-    float ang, ang_pulgar;          /* radianes, con el signo */
+    int eje[2], eje_pulgar[2];
+    float ang[2], ang_pulgar[2];    /* radianes, con el signo */
 } g_c;
 
 /* Por hueso: la rotación que vino de la animación y la que escribimos, para
@@ -219,6 +225,67 @@ static int lado(const char *nombre)
     return -1;
 }
 
+/* La base de la cadena de dedo de un hueso: el ancestro que es hijo directo de la mano. */
+static int base_cadena(const Esqueleto *e, int hueso, int mano)
+{
+    int k, p = hueso;
+    for (k = 0; k < 4 && p >= 0 && p < e->n; k++) {
+        if (e->padres[p] == mano)
+            return p;
+        p = e->padres[p];
+    }
+    return -1;
+}
+
+/* Distancia del hueso a su padre en la pose local (la de la animación). -1 si no se puede leer. */
+static float largo_local(void *pose, int hueso)
+{
+    const float *t = leer_ptr((unsigned char *)pose + 4);    /* hkaPose: pose local, hkQsTransform de 0x30 */
+    if (!t || IsBadReadPtr(t + hueso * 12, 12))
+        return -1.0f;
+    t += hueso * 12;
+    return sqrtf(t[0] * t[0] + t[1] * t[1] + t[2] * t[2]);
+}
+
+/* Sin nombres: elige la cadena del pulgar (PulgarIzq/PulgarDer, o si es 0 la
+ * de base más corta, que en una mano es la que sale de cerca de la muñeca) y
+ * marca sus huesos. */
+static void marcar_pulgar(void *pose, const Esqueleto *e, int h, int m, Dedo *d, int n, int anotar)
+{
+    int bases[8], nb = 0, k, j, elegida = -1;
+    float largo[8], menor = 1e9f;
+    char buf[256];
+    int o = 0;
+    for (k = 0; k < n; k++) {
+        int b = base_cadena(e, d[k].hueso, h);
+        for (j = 0; j < nb && bases[j] != b; j++)
+            ;
+        if (b >= 0 && j == nb && nb < 8) {
+            bases[nb] = b;
+            largo[nb] = largo_local(pose, b);
+            nb++;
+        }
+    }
+    /* Las bases salen en orden de hueso porque d[] se armó en orden. */
+    if (g_pulgar_ini[m] > 0 && g_pulgar_ini[m] <= nb)
+        elegida = g_pulgar_ini[m] - 1;
+    else if (g_pulgar_ini[m] == 0)
+        for (j = 0; j < nb; j++)
+            if (largo[j] >= 0.0f && largo[j] < menor) {
+                menor = largo[j];
+                elegida = j;
+            }
+    for (k = 0; k < n; k++)
+        d[k].pulgar = elegida >= 0 && base_cadena(e, d[k].hueso, h) == bases[elegida];
+    if (anotar) {
+        buf[0] = 0;
+        for (j = 0; j < nb && o < (int)sizeof buf - 32; j++)
+            o += snprintf(buf + o, sizeof buf - o, " %d:0x%02x(%.3f)", j + 1, bases[j], largo[j]);
+        logf_("mano %s: cadenas (base y largo)%s -> pulgar %d%s", m ? "derecha" : "izquierda", buf, elegida + 1,
+              g_pulgar_ini[m] > 0 ? " (del .ini)" : g_pulgar_ini[m] < 0 ? " (ninguno, del .ini)" : " (la base mas corta)");
+    }
+}
+
 /* Arma la lista de dedos de cada mano. Una vez por pose nueva, anota todo
  * el esqueleto en el log. */
 static void preparar_dedos(void *pose, int nuevos[2], Dedo d[2][MAX_HUESOS_DEDO], int anotar)
@@ -260,6 +327,8 @@ static void preparar_dedos(void *pose, int nuevos[2], Dedo d[2][MAX_HUESOS_DEDO]
             d[m][nuevos[m]].pulgar = contiene(nb, "thumb");
             nuevos[m]++;
         }
+        if (!por_nombre)
+            marcar_pulgar(pose, &e, h, m, d[m], nuevos[m], anotar);
         if (anotar) {
             char buf[512];
             int k, o = 0;
@@ -293,8 +362,8 @@ static void __cdecl paso_ik(void *personaje)
             for (k = 0; k < g_c.n[m]; k++) {
                 const Dedo *d = &g_c.d[m][k];
                 float *t = g_hueso_local(g_c.pose, d->hueso), *q, r[4] = { 0, 0, 0, 1 }, s;
-                int eje = d->pulgar ? g_c.eje_pulgar : g_c.eje;
-                float ang = (d->pulgar ? g_c.ang_pulgar : g_c.ang) * c;
+                int eje = d->pulgar ? g_c.eje_pulgar[m] : g_c.eje[m];
+                float ang = (d->pulgar ? g_c.ang_pulgar[m] : g_c.ang[m]) * c;
                 if (!t)
                     continue;
                 q = t + 4;              /* hkQsTransform: traslación, rotación, escala */
@@ -415,10 +484,12 @@ static void f_tick(float dt)
     }
     g_c.cierre[0] = g_cierre[0];
     g_c.cierre[1] = g_cierre[1];
-    g_c.eje = g_eje;
-    g_c.eje_pulgar = g_eje_pulgar;
-    g_c.ang = g_signo * g_angulo * 3.14159265f / 180.0f;
-    g_c.ang_pulgar = g_signo_pulgar * g_angulo_pulgar * 3.14159265f / 180.0f;
+    for (m = 0; m < 2; m++) {
+        g_c.eje[m] = g_eje[m];
+        g_c.eje_pulgar[m] = g_eje_pulgar[m];
+        g_c.ang[m] = g_signo[m] * g_angulo * 3.14159265f / 180.0f;
+        g_c.ang_pulgar[m] = g_signo_pulgar[m] * g_angulo_pulgar * 3.14159265f / 180.0f;
+    }
     g_c.listo = g_paso_original != NULL && (g_c.n[0] || g_c.n[1]);
 
     g_t_log += dt;
@@ -434,6 +505,8 @@ static int leer_eje(const char *ruta, const char *clave, const char *def, float 
     char buf[16], *p = buf;
     GetPrivateProfileStringA("Dedos", clave, def, buf, sizeof buf, ruta);
     *signo = 1.0f;
+    if (!*p)
+        return -1;                  /* no está en el .ini */
     if (*p == '-') {
         *signo = -1.0f;
         p++;
@@ -463,8 +536,22 @@ static void leer_ini(void)
     g_boton = GetPrivateProfileIntA("Dedos", "Boton", 2, ruta);
     g_angulo = leer_float(ruta, "Angulo", 70.0f, 0.0f, 120.0f);
     g_angulo_pulgar = leer_float(ruta, "AnguloPulgar", 35.0f, 0.0f, 120.0f);
-    g_eje = leer_eje(ruta, "EjeDedos", "-z", &g_signo);
-    g_eje_pulgar = leer_eje(ruta, "EjePulgar", "x", &g_signo_pulgar);
+    /* EjeDedos / EjePulgar son de la mano derecha; la izquierda, si no tiene
+     * los suyos, usa el mismo eje con el signo al revés (está en espejo). */
+    g_eje[1] = leer_eje(ruta, "EjeDedos", "-z", &g_signo[1]);
+    g_eje_pulgar[1] = leer_eje(ruta, "EjePulgar", "x", &g_signo_pulgar[1]);
+    g_eje[0] = leer_eje(ruta, "EjeDedosIzq", "", &g_signo[0]);
+    if (g_eje[0] < 0) {
+        g_eje[0] = g_eje[1];
+        g_signo[0] = -g_signo[1];
+    }
+    g_eje_pulgar[0] = leer_eje(ruta, "EjePulgarIzq", "", &g_signo_pulgar[0]);
+    if (g_eje_pulgar[0] < 0) {
+        g_eje_pulgar[0] = g_eje_pulgar[1];
+        g_signo_pulgar[0] = -g_signo_pulgar[1];
+    }
+    g_pulgar_ini[0] = GetPrivateProfileIntA("Dedos", "PulgarIzq", 0, ruta);
+    g_pulgar_ini[1] = GetPrivateProfileIntA("Dedos", "PulgarDer", 0, ruta);
     g_velocidad = leer_float(ruta, "Velocidad", 12.0f, 1.0f, 60.0f);
     g_hueso_mano[0] = GetPrivateProfileIntA("Dedos", "HuesoManoA", 0x09, ruta);
     g_hueso_mano[1] = GetPrivateProfileIntA("Dedos", "HuesoManoB", 0x20, ruta);
@@ -477,9 +564,11 @@ static void f_config(void)
     static const char ejes[] = "xyz";
     leer_ini();
     g_pose_vista = NULL;            /* volver a armar (y anotar) los dedos */
-    logf_("ini: Activado=%d Boton=%d Angulo=%.0f AnguloPulgar=%.0f EjeDedos=%s%c EjePulgar=%s%c Velocidad=%.0f manos 0x%02x/0x%02x SoloManosVacias=%d",
-          g_activado, g_boton, g_angulo, g_angulo_pulgar, g_signo < 0 ? "-" : "", ejes[g_eje],
-          g_signo_pulgar < 0 ? "-" : "", ejes[g_eje_pulgar], g_velocidad, g_hueso_mano[0], g_hueso_mano[1], g_solo_vacias);
+    logf_("ini: Activado=%d Boton=%d Angulo=%.0f AnguloPulgar=%.0f Velocidad=%.0f manos 0x%02x/0x%02x SoloManosVacias=%d",
+          g_activado, g_boton, g_angulo, g_angulo_pulgar, g_velocidad, g_hueso_mano[0], g_hueso_mano[1], g_solo_vacias);
+    logf_("ini: izq dedos %s%c pulgar %s%c (cadena %d) / der dedos %s%c pulgar %s%c (cadena %d)",
+          g_signo[0] < 0 ? "-" : "+", ejes[g_eje[0]], g_signo_pulgar[0] < 0 ? "-" : "+", ejes[g_eje_pulgar[0]], g_pulgar_ini[0],
+          g_signo[1] < 0 ? "-" : "+", ejes[g_eje[1]], g_signo_pulgar[1] < 0 ? "-" : "+", ejes[g_eje_pulgar[1]], g_pulgar_ini[1]);
 }
 
 static void f_pausa(int pausado)

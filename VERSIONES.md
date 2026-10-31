@@ -10,6 +10,6 @@ Regla: ver CLAUDE.md. Siempre partir del último número de esta tabla.
 | mapa | v0.7.1 | 29/10/2026 | Calma solo después de un empujón |
 | pausa | v0.1 | 28/10/2026 | Pausa al sacarte el visor |
 | usar | v0.1.5 | 29/10/2026 | Alcance 0.12 y log de la cabeza |
-| dedos | v0.1.1 | 31/10/2026 | Manos 0x09 (izq) y 0x20 (der), sin el 0x30, eje -z |
+| dedos | v0.1.2 | 31/10/2026 | Mano izquierda en espejo (signo al reves), pulgar detectado con su propio eje |
 
 La próxima de cada una sigue desde acá (por ejemplo dedos v0.1.1 o v0.2.0, nunca otra v0.1).
