@@ -23,7 +23,12 @@
  * guarda la interacción en curso en pj+0x3570 o +0x3574 (lo encontró el
  * buscador: aparece 0.1 a 0.2 s después y se va al terminar). Si en
  * CONFIRMAR segundos aparece un objeto nuevo entre pj+0x3560 y +0x3590,
- * vibra; si no, fue al aire. Vibrar=2 vibra siempre, como antes. */
+ * vibra; si no, fue al aire. Vibrar=2 vibra siempre, como antes.
+ *
+ * EnLocker=0 (v0.1.8): escondida en el locker (o en un ducto: pj+0x2b4,
+ * forzada a agacharse, la misma bandera que usan agachar y palanca) el
+ * empujón no aprieta usar. Ahí usar te saca del locker, y al inclinarte
+ * hacia adelante las manos van hacia adelante con vos y se disparaba solo. */
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
@@ -34,12 +39,13 @@
 #include "usar_gesto.h"
 
 #ifndef VERSION
-#define VERSION "usar v0.1.7"
+#define VERSION "usar v0.1.8"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
 #define OFS_CONTROL         0x64
 #define OFS_POSICION        0x70
+#define OFS_FORZADO         0x2b4         /* forzada a agacharse: locker, ducto */
 #define SLOT_POSES          11
 #define MAX_DISPOSITIVOS    16
 
@@ -64,6 +70,7 @@ static float g_mantener = 0.12f;   /* s con la tecla abajo */
 static int g_mano = 2;              /* 0 izquierda, 1 derecha, 2 cualquiera */
 static GestoUsar g_gesto = { 1.0f, 0.12f, 50.0f, 0.6f };
 static int g_vibrar = 1;
+static int g_en_locker = 0;         /* 1 = el empujon tambien aprieta en el locker */
 static int g_log = 1, g_log_gesto = 1, g_buscar = 1;
 
 /* Estado */
@@ -116,6 +123,13 @@ static int ripley_libre(void)
         return 0;
     ctl = (unsigned char *)leer_ptr((unsigned)(UINT_PTR)(pj + OFS_CONTROL));
     return ctl && !IsBadReadPtr(ctl + 0x1f, 1) && ctl[0x1f];
+}
+
+/* 1 si Ripley está escondida en un locker o en un ducto. */
+static int en_locker(void)
+{
+    unsigned char *pj = ripley();
+    return pj && !IsBadReadPtr(pj + OFS_FORZADO, 1) && pj[OFS_FORZADO];
 }
 
 static int juego_con_foco(void)
@@ -357,6 +371,11 @@ static void empujar(int mano, const float visor[3][4])
               !foco ? "el juego no tiene el foco" : "Ripley no esta en control libre");
         return;
     }
+    if (!g_en_locker && en_locker()) {
+        logf_("empujon con la mano %s, pero Ripley esta en el locker o en un ducto: no aprieto (EnLocker=0)",
+              mano ? "derecha" : "izquierda");
+        return;
+    }
     tecla(1);
     g_toque = g_mantener;
     if (g_vibrar == 2) {
@@ -527,6 +546,7 @@ static void f_config(void)
     g_gesto.angulo = leer_float("Angulo", "50", 5.0f, 90.0f);
     g_gesto.espera = leer_float("Espera", "0.6", 0.1f, 5.0f);
     g_vibrar = GetPrivateProfileIntA("Usar", "Vibrar", 1, ruta);
+    g_en_locker = GetPrivateProfileIntA("Usar", "EnLocker", 0, ruta);
     g_log = GetPrivateProfileIntA("Usar", "Log", 1, ruta);
     g_log_gesto = GetPrivateProfileIntA("Usar", "LogGesto", 1, ruta);
     g_buscar = GetPrivateProfileIntA("Usar", "Buscar", 1, ruta);
@@ -538,9 +558,9 @@ static void f_config(void)
         g_tecla = 0;                /* volver a buscar la tecla */
         g_t_tecla = 10.0f;
     }
-    logf_("ini: Activado=%d Accion=%d Tecla=%02x Mano=%d Velocidad=%.2f Alcance=%.2f Angulo=%.0f Espera=%.2f Mantener=%.2f Buscar=%d LogGesto=%d",
+    logf_("ini: Activado=%d Accion=%d Tecla=%02x Mano=%d Velocidad=%.2f Alcance=%.2f Angulo=%.0f Espera=%.2f Mantener=%.2f EnLocker=%d Buscar=%d LogGesto=%d",
           g_activado, g_accion, g_tecla_ini, g_mano, g_gesto.velocidad, g_gesto.alcance, g_gesto.angulo,
-          g_gesto.espera, g_mantener, g_buscar, g_log_gesto);
+          g_gesto.espera, g_mantener, g_en_locker, g_buscar, g_log_gesto);
 }
 
 static void soltar(void)
