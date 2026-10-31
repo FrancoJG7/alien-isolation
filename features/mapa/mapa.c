@@ -38,6 +38,8 @@
  * Desde la v0.7.5 un tirón hacia abajo (más de CalmaBajando m/s, la palanca)
  * también arranca la Calma. Desde la v0.7.6 no abre mientras palanca.dll
  * deja AI_MODS_PALANCA=1 en el entorno del proceso (armada o tirando).
+ * En la v0.7.7 las dos cosas vienen apagadas (CalmaBajando=0,
+ * MirarPalanca=0): a Franco no le cambiaron nada y prefirió el de antes.
  *
  * Desde la v0.7.2 el reloj además tiene que estar cerca del centro de la
  * vista (MiradaMax grados entre el frente del visor y la dirección
@@ -60,7 +62,7 @@
 #include "mapa_gesto.h"
 
 #ifndef VERSION
-#define VERSION "mapa v0.7.6"
+#define VERSION "mapa v0.7.7"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -97,7 +99,8 @@ static float g_margen_ang = 8.0f;
 static float g_vel_max = 0.6f;      /* m/s: más rápido no es mirar la hora */
 static float g_calma = 1.0f;        /* s quieta después de un movimiento rápido */
 static float g_t_calma;
-static float g_calma_bajando = 0.6f;    /* m/s hacia abajo que también arrancan la Calma; 0 = no */
+static float g_calma_bajando;           /* m/s hacia abajo que también arrancan la Calma; 0 = no */
+static int g_mirar_palanca;             /* 1 = no abrir con AI_MODS_PALANCA=1 */
 static float g_mirada_max = 30.0f;  /* grados del reloj al centro de la vista; 0 = sin límite */
 static float g_ult_ang, g_ult_dist, g_ult_rapidez, g_ult_mirada;    /* para el log de abrir */
 static int g_aviso_mirada;          /* ya anotamos que este gesto no abre por la mirada */
@@ -479,7 +482,7 @@ static void f_tick(float dt)
     if (!g_abierto) {
         char pal[4];
         g_t_mira = mira ? g_t_mira + dt : 0.0f;
-        if (g_t_mira >= g_demora && GetEnvironmentVariableA("AI_MODS_PALANCA", pal, sizeof pal) && pal[0] == '1') {
+        if (g_mirar_palanca && g_t_mira >= g_demora && GetEnvironmentVariableA("AI_MODS_PALANCA", pal, sizeof pal) && pal[0] == '1') {
             /* palanca.dll armada o tirando: el dorso de la mano queda a la cara sin querer */
             if (g_log && !g_aviso_palanca)
                 logf_("palanca activa: no abro");
@@ -580,9 +583,10 @@ static void f_config(void)
     g_calma = leer_float("Calma", "1.0");
     if (g_calma < 0.0f || g_calma > 3.0f)
         g_calma = 1.0f;
-    g_calma_bajando = leer_float("CalmaBajando", "0.6");
+    g_calma_bajando = leer_float("CalmaBajando", "0");
     if (g_calma_bajando < 0.0f || g_calma_bajando > 5.0f)
-        g_calma_bajando = 0.6f;
+        g_calma_bajando = 0.0f;
+    g_mirar_palanca = GetPrivateProfileIntA("Mapa", "MirarPalanca", 0, ruta);
     g_margen_ang = leer_float("MargenAngulo", "8");
     if (g_margen_ang < 0.0f || g_margen_ang > 45.0f)
         g_margen_ang = 8.0f;
@@ -595,10 +599,10 @@ static void f_config(void)
         tv_apretar(0);
         g_abierto = 0;
     }
-    logf_("ini: Activado=%d Accion=%d Modo=%d Mano=%s Eje=%s%c Angulo=%.0f Distancia=%.2f Demora=%.2f CerrarSoloSiMenu=%d DemoraCerrar=%.2f MargenAngulo=%.0f VelocidadMax=%.2f Calma=%.2f CalmaBajando=%.2f MiradaMax=%.0f",
+    logf_("ini: Activado=%d Accion=%d Modo=%d Mano=%s Eje=%s%c Angulo=%.0f Distancia=%.2f Demora=%.2f CerrarSoloSiMenu=%d DemoraCerrar=%.2f MargenAngulo=%.0f VelocidadMax=%.2f Calma=%.2f CalmaBajando=%.2f MiradaMax=%.0f MirarPalanca=%d",
           g_activado, g_accion, g_modo, g_mano ? "derecha" : "izquierda", g_signo < 0 ? "-" : "+",
           "xyz"[g_eje], g_angulo, g_distancia, g_demora, g_cerrar_solo_menu, g_demora_cerrar, g_margen_ang, g_vel_max, g_calma,
-          g_calma_bajando, g_mirada_max);
+          g_calma_bajando, g_mirada_max, g_mirar_palanca);
 }
 
 static void f_pausa(int pausado)
