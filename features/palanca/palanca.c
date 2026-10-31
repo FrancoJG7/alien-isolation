@@ -16,6 +16,10 @@
  * demasiado de cómo la bajabas y el juego se perdía toques.) Con Boton
  * 0/1/2 se tira agarrando (agarre, A/X, gatillo) y anda siempre, sin armar.
  *
+ * Mientras está armada (o mandando toques) deja la variable de entorno
+ * AI_MODS_PALANCA=1 en el proceso del juego: mapa.dll la mira y no abre el
+ * reloj, porque al tirar de la palanca el dorso de la mano queda a la cara. */
+ *
  * No sabemos todavía qué acción pide el juego para la palanca: por defecto
  * la 12 (usar, la E), que es lo que suele hacer la A. Descubrir=1 anota cada
  * acción que se aprieta, así que si no anda, apretás la A de verdad y en
@@ -29,7 +33,7 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "palanca v0.3.2"
+#define VERSION "palanca v0.3.3"
 #endif
 
 #define SLOT_POSES          11
@@ -58,7 +62,7 @@ static int g_mano = 2;              /* 0 izquierda, 1 derecha, 2 cualquiera */
 static int g_boton = -1;            /* -1 sin botón (armado por usar), 0 agarre, 1 A/X, 2 gatillo */
 static float g_recorrido = 0.10f;   /* m hacia abajo por tirón */
 static float g_velocidad = 0.4f;    /* m/s hacia abajo como mínimo */
-static int g_toques = 5;            /* toques por tirón */
+static int g_toques = 7;            /* toques por tirón */
 static int g_tirones = 3;           /* por vez que se arma (o por agarre) */
 static float g_entre = 0.12f;       /* s suelta entre un toque y el siguiente */
 static float g_ventana = 8.0f;      /* s armado después de usar */
@@ -174,6 +178,16 @@ static void toque(void)
         vibrar_pedir(g_mano_activa, 1, 12.0f, 0.0f, 0.5f);
 }
 
+/* Para las otras features (mapa): 1 mientras la palanca está armada o mandando toques. */
+static void avisar(int activa)
+{
+    static int antes = -1;
+    if (activa != antes) {
+        SetEnvironmentVariableA("AI_MODS_PALANCA", activa ? "1" : NULL);
+        antes = activa;
+    }
+}
+
 static void reiniciar(void)
 {
     g_m[0].agarrado = g_m[1].agarrado = 0;
@@ -217,6 +231,7 @@ static void f_tick(float dt)
         return;
     if (g_toque <= 0.0f && g_suelta >= g_entre && g_pendientes > 0)
         toque();
+    avisar(g_armado >= 0.0f || g_pendientes > 0 || g_toque > 0.0f);
     if (g_descubrir)
         descubrir();
     if (g_boton < 0) {
@@ -352,7 +367,7 @@ static void f_config(void)
     g_boton = GetPrivateProfileIntA("Palanca", "Boton", -1, ruta);
     g_recorrido = leer_float("Recorrido", 0.10f, 0.03f, 0.8f);
     g_velocidad = leer_float("Velocidad", 0.4f, 0.0f, 5.0f);
-    g_toques = GetPrivateProfileIntA("Palanca", "Toques", 5, ruta);
+    g_toques = GetPrivateProfileIntA("Palanca", "Toques", 7, ruta);
     g_tirones = GetPrivateProfileIntA("Palanca", "Tirones", 3, ruta);
     g_entre = leer_float("Entre", 0.12f, 0.02f, 1.0f);
     g_ventana = leer_float("Ventana", 8.0f, 0.5f, 60.0f);
@@ -380,6 +395,7 @@ static void soltar(void)
         tecla(0);
     g_toque = 0.0f;
     g_pendientes = 0;
+    avisar(0);
     vibrar_cortar();
 }
 
