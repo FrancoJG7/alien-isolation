@@ -32,7 +32,7 @@
 #include "vibrar.h"
 
 #ifndef VERSION
-#define VERSION "dedos v0.1.3"
+#define VERSION "dedos v0.1.4"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
@@ -71,9 +71,10 @@ static FnHuesoLocal g_hueso_local;
 static int g_activado = 1;
 static int g_boton = 2;             /* 0 gatillo, 1 agarre, 2 el más apretado de los dos */
 static float g_angulo = 70.0f;      /* grados por articulación con la mano cerrada */
-static float g_angulo_pulgar = 20.0f;
-static int g_eje[2] = { 2, 2 }, g_eje_pulgar[2] = { 1, 1 };   /* por mano (0 izq, 1 der): 0 x, 1 y, 2 z del hueso */
-static float g_signo[2] = { 1.0f, -1.0f }, g_signo_pulgar[2] = { 1.0f, 1.0f };
+static float g_angulo_pulgar[2] = { 20.0f, 20.0f };  /* por mano (0 izq, 1 der) */
+/* Ejes de giro en el espacio del hueso, por mano, ya con el signo. Pueden
+ * ser una mezcla ("y-0.4z"): se normalizan. */
+static float g_eje[2][3] = { { 0, 0, 1 }, { 0, 0, -1 } }, g_eje_pulgar[2][3] = { { 0, 1, 0 }, { 0, 1, 0 } };
 static int g_pulgar_ini[2];         /* cadena del pulgar, 1 a 5 contando desde el hueso más bajo; 0 = sola, -1 = ninguna */
 static float g_velocidad = 12.0f;   /* qué tan rápido sigue al botón (1/s) */
 static int g_hueso_mano[2] = { 0x09, 0x20 };  /* izquierda, derecha (si los huesos tienen nombre, se decide por nombre) */
@@ -92,8 +93,8 @@ static struct {
     int n[2];
     Dedo d[2][MAX_HUESOS_DEDO];
     float cierre[2];                /* 0 abierta, 1 cerrada */
-    int eje[2], eje_pulgar[2];
-    float ang[2], ang_pulgar[2];    /* radianes, con el signo */
+    float eje[2][3], eje_pulgar[2][3];
+    float ang[2], ang_pulgar[2];    /* radianes */
 } g_c;
 
 /* Por hueso: la rotación que vino de la animación y la que escribimos, para
@@ -362,8 +363,8 @@ static void __cdecl paso_ik(void *personaje)
             float c = g_c.cierre[m];
             for (k = 0; k < g_c.n[m]; k++) {
                 const Dedo *d = &g_c.d[m][k];
-                float *t = g_hueso_local(g_c.pose, d->hueso), *q, r[4] = { 0, 0, 0, 1 }, s;
-                int eje = d->pulgar ? g_c.eje_pulgar[m] : g_c.eje[m];
+                float *t = g_hueso_local(g_c.pose, d->hueso), *q, r[4], s;
+                const float *eje = d->pulgar ? g_c.eje_pulgar[m] : g_c.eje[m];
                 float ang = (d->pulgar ? g_c.ang_pulgar[m] : g_c.ang[m]) * c;
                 if (!t)
                     continue;
@@ -376,7 +377,9 @@ static void __cdecl paso_ik(void *personaje)
                     continue;
                 }
                 s = sinf(ang * 0.5f);
-                r[eje] = s;
+                r[0] = eje[0] * s;
+                r[1] = eje[1] * s;
+                r[2] = eje[2] * s;
                 r[3] = cosf(ang * 0.5f);
                 q_mul(g_base[m][k], r, q);
                 memcpy(g_escrita[m][k], q, 16);
@@ -486,10 +489,10 @@ static void f_tick(float dt)
     g_c.cierre[0] = g_cierre[0];
     g_c.cierre[1] = g_cierre[1];
     for (m = 0; m < 2; m++) {
-        g_c.eje[m] = g_eje[m];
-        g_c.eje_pulgar[m] = g_eje_pulgar[m];
-        g_c.ang[m] = g_signo[m] * g_angulo * 3.14159265f / 180.0f;
-        g_c.ang_pulgar[m] = g_signo_pulgar[m] * g_angulo_pulgar * 3.14159265f / 180.0f;
+        memcpy(g_c.eje[m], g_eje[m], sizeof g_eje[m]);
+        memcpy(g_c.eje_pulgar[m], g_eje_pulgar[m], sizeof g_eje_pulgar[m]);
+        g_c.ang[m] = g_angulo * 3.14159265f / 180.0f;
+        g_c.ang_pulgar[m] = g_angulo_pulgar[m] * 3.14159265f / 180.0f;
     }
     g_c.listo = g_paso_original != NULL && (g_c.n[0] || g_c.n[1]);
 
@@ -501,23 +504,54 @@ static void f_tick(float dt)
 }
 
 /* --- .ini --- */
-static int leer_eje(const char *ruta, const char *clave, const char *def, float *signo)
+/* Entiende un eje: "x", "-z", o una mezcla como "y-0.4z" o "y+0.5x-0.2z".
+ * Devuelve 0 si está vacío o no se entiende, y deja v como estaba. */
+static int texto_a_eje(const char *p, float v[3])
 {
-    char buf[16], *p = buf;
-    GetPrivateProfileStringA("Dedos", clave, def, buf, sizeof buf, ruta);
-    *signo = 1.0f;
-    if (!*p)
-        return -1;                  /* no está en el .ini */
-    if (*p == '-') {
-        *signo = -1.0f;
+    float r[3] = { 0, 0, 0 }, n;
+    while (*p) {
+        float signo = 1.0f, peso = 1.0f;
+        char *fin;
+        int k;
+        while (*p == ' ')
+            p++;
+        if (!*p)
+            break;
+        if (*p == '-' || *p == '+') {
+            signo = *p == '-' ? -1.0f : 1.0f;
+            p++;
+            while (*p == ' ')
+                p++;
+        }
+        if ((*p >= '0' && *p <= '9') || *p == '.') {
+            peso = (float)strtod(p, &fin);
+            p = fin;
+        }
+        k = tolower((unsigned char)*p) - 'x';
+        if (k < 0 || k > 2)
+            return 0;
+        r[k] += signo * peso;
         p++;
-    } else if (*p == '+')
-        p++;
-    switch (tolower((unsigned char)*p)) {
-    case 'x': return 0;
-    case 'y': return 1;
-    default: return 2;
     }
+    n = sqrtf(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+    if (!(n > 1e-3f))
+        return 0;
+    v[0] = r[0] / n;
+    v[1] = r[1] / n;
+    v[2] = r[2] / n;
+    return 1;
+}
+
+static int leer_eje(const char *ruta, const char *clave, float v[3])
+{
+    char buf[48];
+    GetPrivateProfileStringA("Dedos", clave, "", buf, sizeof buf, ruta);
+    return texto_a_eje(buf, v);
+}
+
+static void texto_eje(const float v[3], char *buf, size_t tam)
+{
+    snprintf(buf, tam, "(%.2f %.2f %.2f)", v[0], v[1], v[2]);
 }
 
 static float leer_float(const char *ruta, const char *clave, float def, float min, float max)
@@ -536,22 +570,23 @@ static void leer_ini(void)
     g_activado = GetPrivateProfileIntA("Dedos", "Activado", 1, ruta);
     g_boton = GetPrivateProfileIntA("Dedos", "Boton", 2, ruta);
     g_angulo = leer_float(ruta, "Angulo", 70.0f, 0.0f, 120.0f);
-    g_angulo_pulgar = leer_float(ruta, "AnguloPulgar", 20.0f, 0.0f, 120.0f);
+    g_angulo_pulgar[1] = leer_float(ruta, "AnguloPulgar", 20.0f, 0.0f, 120.0f);
+    g_angulo_pulgar[0] = leer_float(ruta, "AnguloPulgarIzq", g_angulo_pulgar[1], 0.0f, 120.0f);
+    g_angulo_pulgar[1] = leer_float(ruta, "AnguloPulgarDer", g_angulo_pulgar[1], 0.0f, 120.0f);
     /* EjeDedos / EjePulgar son de la mano derecha. Si la izquierda no tiene
      * los suyos, los dedos usan el mismo eje con el signo al revés (están en
      * espejo) y el pulgar el mismo eje y el mismo signo. */
-    g_eje[1] = leer_eje(ruta, "EjeDedos", "-z", &g_signo[1]);
-    g_eje_pulgar[1] = leer_eje(ruta, "EjePulgar", "y", &g_signo_pulgar[1]);
-    g_eje[0] = leer_eje(ruta, "EjeDedosIzq", "", &g_signo[0]);
-    if (g_eje[0] < 0) {
-        g_eje[0] = g_eje[1];
-        g_signo[0] = -g_signo[1];
+    if (!leer_eje(ruta, "EjeDedos", g_eje[1]))
+        texto_a_eje("-z", g_eje[1]);
+    if (!leer_eje(ruta, "EjePulgar", g_eje_pulgar[1]))
+        texto_a_eje("y", g_eje_pulgar[1]);
+    if (!leer_eje(ruta, "EjeDedosIzq", g_eje[0])) {
+        int k;
+        for (k = 0; k < 3; k++)
+            g_eje[0][k] = -g_eje[1][k];
     }
-    g_eje_pulgar[0] = leer_eje(ruta, "EjePulgarIzq", "", &g_signo_pulgar[0]);
-    if (g_eje_pulgar[0] < 0) {
-        g_eje_pulgar[0] = g_eje_pulgar[1];
-        g_signo_pulgar[0] = g_signo_pulgar[1];
-    }
+    if (!leer_eje(ruta, "EjePulgarIzq", g_eje_pulgar[0]))
+        memcpy(g_eje_pulgar[0], g_eje_pulgar[1], sizeof g_eje_pulgar[1]);
     g_pulgar_ini[0] = GetPrivateProfileIntA("Dedos", "PulgarIzq", 0, ruta);
     g_pulgar_ini[1] = GetPrivateProfileIntA("Dedos", "PulgarDer", 0, ruta);
     g_velocidad = leer_float(ruta, "Velocidad", 12.0f, 1.0f, 60.0f);
@@ -563,14 +598,17 @@ static void leer_ini(void)
 
 static void f_config(void)
 {
-    static const char ejes[] = "xyz";
+    char e[4][32];
     leer_ini();
     g_pose_vista = NULL;            /* volver a armar (y anotar) los dedos */
-    logf_("ini: Activado=%d Boton=%d Angulo=%.0f AnguloPulgar=%.0f Velocidad=%.0f manos 0x%02x/0x%02x SoloManosVacias=%d",
-          g_activado, g_boton, g_angulo, g_angulo_pulgar, g_velocidad, g_hueso_mano[0], g_hueso_mano[1], g_solo_vacias);
-    logf_("ini: izq dedos %s%c pulgar %s%c (cadena %d) / der dedos %s%c pulgar %s%c (cadena %d)",
-          g_signo[0] < 0 ? "-" : "+", ejes[g_eje[0]], g_signo_pulgar[0] < 0 ? "-" : "+", ejes[g_eje_pulgar[0]], g_pulgar_ini[0],
-          g_signo[1] < 0 ? "-" : "+", ejes[g_eje[1]], g_signo_pulgar[1] < 0 ? "-" : "+", ejes[g_eje_pulgar[1]], g_pulgar_ini[1]);
+    logf_("ini: Activado=%d Boton=%d Angulo=%.0f AnguloPulgar izq %.0f der %.0f Velocidad=%.0f manos 0x%02x/0x%02x SoloManosVacias=%d",
+          g_activado, g_boton, g_angulo, g_angulo_pulgar[0], g_angulo_pulgar[1], g_velocidad, g_hueso_mano[0], g_hueso_mano[1], g_solo_vacias);
+    texto_eje(g_eje[0], e[0], sizeof e[0]);
+    texto_eje(g_eje_pulgar[0], e[1], sizeof e[1]);
+    texto_eje(g_eje[1], e[2], sizeof e[2]);
+    texto_eje(g_eje_pulgar[1], e[3], sizeof e[3]);
+    logf_("ini: izq dedos %s pulgar %s (cadena %d) / der dedos %s pulgar %s (cadena %d)",
+          e[0], e[1], g_pulgar_ini[0], e[2], e[3], g_pulgar_ini[1]);
 }
 
 static void f_pausa(int pausado)
