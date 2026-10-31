@@ -21,6 +21,7 @@ for n in "$@"; do
     d=features/$n
     [ -d "$d" ] || { echo "no existe la feature $n"; exit 1; }
     fuentes=$(ls $d/*.c | grep -v '/prueba_')
+    rm -f salida/mods_vr/$n.dll     # si no compila, que instalar.sh no encuentre la vieja
     $CC $FLAGS -o salida/mods_vr/$n.dll $fuentes
     echo "ok: mods_vr/$n.dll"
 done

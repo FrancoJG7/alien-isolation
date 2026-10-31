@@ -4,9 +4,14 @@
  * y en lugar de apretar el botón que pide el juego para bajarla (la A),
  * bajás la mano como si tiraras de la palanca de verdad.
  *
- * Por defecto (Boton=-1) no hace falta botón: después de cada "usar"
- * (acción 12) queda armado Ventana segundos; pasado Gracia (la mano que
- * vuelve del empujón no cuenta), cada tirón (una mano que baja Recorrido
+ * Por defecto (Boton=-1) no hace falta botón. Se arma solo cuando Ripley
+ * queda agarrada a algo: un "usar" (acción 12) y, dentro de Agarre segundos,
+ * Ripley sale del control libre (está en la animación de la palanca). Queda
+ * armada mientras siga fuera del control libre (hasta Ventana segundos) y
+ * se desarma apenas vuelve. Si está forzada a agacharse (pj+0x2b4: locker o
+ * ducto) no se arma, para no sacarte del locker. (Hasta la v0.3 se armaba
+ * con cualquier usar y mandaba toques en cualquier lado.) Pasado Gracia (la
+ * mano que vuelve del empujón no cuenta), cada tirón (una mano que baja Recorrido
  * metros desde lo más alto, a más de Velocidad) manda una ráfaga de Toques
  * toques de la acción (Accion, la tecla que tenga en el juego, por SendInput
  * como usar.dll), a ritmo de persona (Mantener abajo, Entre suelta). La
@@ -18,10 +23,10 @@
  *
  * Mientras está armada (o mandando toques) deja la variable de entorno
  * AI_MODS_PALANCA=1 en el proceso del juego: mapa.dll la mira y no abre el
- * reloj, porque al tirar de la palanca el dorso de la mano queda a la cara. */
+ * reloj, porque al tirar de la palanca el dorso de la mano queda a la cara.
  *
- * No sabemos todavía qué acción pide el juego para la palanca: por defecto
- * la 12 (usar, la E), que es lo que suele hacer la A. Descubrir=1 anota cada
+ * La acción de la palanca del generador es la 12 (usar, la E): la A da la
+ * misma (lo mostró Descubrir). Descubrir=1 anota cada
  * acción que se aprieta, así que si no anda, apretás la A de verdad y en
  * ai_mods.log queda cuál es. */
 #include <windows.h>
@@ -33,7 +38,7 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "palanca v0.3.3"
+#define VERSION "palanca v0.4.0"
 #endif
 
 #define SLOT_POSES          11
@@ -67,7 +72,11 @@ static int g_tirones = 3;           /* por vez que se arma (o por agarre) */
 static float g_entre = 0.12f;       /* s suelta entre un toque y el siguiente */
 static float g_ventana = 8.0f;      /* s armado después de usar */
 static float g_gracia = 0.4f;       /* s del principio que no cuentan */
+static float g_agarre = 1.5f;       /* s después de usar para que Ripley quede agarrada */
 #define ACCION_USAR 12
+#define DIR_MANAGER_PJ      0x016f0c88u
+#define OFS_CONTROL         0x64
+#define OFS_FORZADO         0x2b4         /* forzada a agacharse: locker, ducto (agachar.dll) */
 #define PROPIO_SEG  0.35f
 static float g_mantener = 0.1f;
 static int g_descubrir = 1;
@@ -79,7 +88,8 @@ static unsigned g_tecla;
 static float g_t_tecla = 10.0f, g_t_mandos = 10.0f, g_toque, g_suelta = 10.0f;
 static int g_pendientes, g_hechos, g_tirones_hechos, g_mano_activa = -1;
 static unsigned char g_estado_antes[MAX_ACCIONES];
-static float g_armado = -1.0f;      /* s desde el último usar; < 0 = no */
+static float g_armado = -1.0f;      /* s desde que quedó agarrada; < 0 = no */
+static float g_t_usar = -1.0f;      /* s desde el último usar, esperando que quede agarrada; < 0 = no */
 static int g_usar_antes;
 static struct {
     int agarrado;
@@ -87,6 +97,39 @@ static struct {
 } g_m[2];
 
 #define logf_(...) do { if (g_log && g_host) g_host->log(g_host, __VA_ARGS__); } while (0)
+
+static void *leer_ptr(const void *dir)
+{
+    if (!dir || IsBadReadPtr(dir, 4))
+        return NULL;
+    return *(void *const *)dir;
+}
+
+static unsigned char *jugador(void)
+{
+    unsigned char *m = leer_ptr((void *)(UINT_PTR)(DIR_MANAGER_PJ + g_delta)), *lista;
+    if (!m)
+        return NULL;
+    m = leer_ptr(m + 8);
+    if (!m || IsBadReadPtr(m, 0x88) || *(unsigned *)(m + 0x84) == 0)
+        return NULL;
+    lista = leer_ptr(m + 0x80);
+    return lista ? leer_ptr(lista) : NULL;
+}
+
+/* 1 libre, 0 no (agarrada, cinemática, menú), -1 no se pudo leer. */
+static int control_libre(unsigned char *pj)
+{
+    unsigned char *ctl = pj ? leer_ptr(pj + OFS_CONTROL) : NULL;
+    if (!ctl || IsBadReadPtr(ctl + 0x1f, 1))
+        return -1;
+    return ctl[0x1f] != 0;
+}
+
+static int forzada(unsigned char *pj)
+{
+    return pj && !IsBadReadPtr(pj + OFS_FORZADO, 1) && pj[OFS_FORZADO];
+}
 
 static int juego_con_foco(void)
 {
@@ -235,28 +278,45 @@ static void f_tick(float dt)
     if (g_descubrir)
         descubrir();
     if (g_boton < 0) {
-        int st = tv_estado(g_delta, ACCION_USAR);
+        int st = tv_estado(g_delta, ACCION_USAR), libre;
+        unsigned char *pj = jugador();
         if (st >= 0) {
             /* Nuestra propia tecla llega al juego con atraso: un usar hasta
-             * PROPIO_SEG después del último toque es nuestro, no arma. */
+             * PROPIO_SEG después del último toque es nuestro. */
             if ((st & 1) && !(g_usar_antes & 1) && g_toque <= 0.0f && g_suelta > PROPIO_SEG && g_pendientes == 0) {
                 if (g_armado >= 0.0f) {
-                    /* Ya estaba armada (otro empujón o la A): solo se
-                     * alarga, sin perder un tirón que estés haciendo. */
                     if (g_armado > g_gracia)
-                        g_armado = g_gracia;
+                        g_armado = g_gracia;    /* otro usar agarrada: sin cortar el tirón */
                     g_tirones_hechos = 0;
                 } else {
-                    g_armado = 0.0f;
-                    reiniciar();    /* empezar a medir de nuevo */
-                    logf_("usar: palanca armada %.0f s", g_ventana);
+                    g_t_usar = 0.0f;
                 }
             }
             g_usar_antes = st;
         }
+        libre = control_libre(pj);
+        if (g_t_usar >= 0.0f) {
+            g_t_usar += dt;
+            if (libre == 0) {
+                g_t_usar = -1.0f;
+                if (forzada(pj)) {
+                    logf_("usar y Ripley agarrada, pero forzada a agacharse (locker o ducto): no armo");
+                } else {
+                    g_armado = 0.0f;
+                    reiniciar();
+                    logf_("usar y Ripley agarrada a algo: palanca armada");
+                }
+            } else if (g_t_usar > g_agarre) {
+                g_t_usar = -1.0f;   /* siguió libre: no era una palanca */
+            }
+        }
         if (g_armado >= 0.0f) {
             g_armado += dt;
-            if (g_armado > g_ventana) {
+            if (libre == 1 && g_pendientes == 0 && g_toque <= 0.0f) {
+                g_armado = -1.0f;
+                logf_("Ripley solto: palanca desarmada (%d toques)", g_hechos);
+                g_tirones_hechos = 0;
+            } else if (g_armado > g_ventana) {
                 g_armado = -1.0f;
                 logf_("palanca desarmada (pasaron %.0f s, %d toques)", g_ventana, g_hechos);
                 g_tirones_hechos = 0;
@@ -372,6 +432,7 @@ static void f_config(void)
     g_entre = leer_float("Entre", 0.12f, 0.02f, 1.0f);
     g_ventana = leer_float("Ventana", 8.0f, 0.5f, 60.0f);
     g_gracia = leer_float("Gracia", 0.4f, 0.0f, 5.0f);
+    g_agarre = leer_float("Agarre", 1.5f, 0.1f, 10.0f);
     g_mantener = leer_float("Mantener", 0.1f, 0.02f, 3.0f);
     g_descubrir = GetPrivateProfileIntA("Palanca", "Descubrir", 1, ruta);
     g_vibrar = GetPrivateProfileIntA("Palanca", "Vibrar", 1, ruta);
@@ -384,8 +445,8 @@ static void f_config(void)
         g_tecla = 0;
         g_t_tecla = 10.0f;
     }
-    logf_("ini: Activado=%d Accion=%d Tecla=%02x Mano=%d Boton=%d Recorrido=%.2f Velocidad=%.2f Toques=%d Tirones=%d Ventana=%.1f Gracia=%.1f Mantener=%.2f Entre=%.2f Descubrir=%d",
-          g_activado, g_accion, g_tecla_ini, g_mano, g_boton, g_recorrido, g_velocidad, g_toques, g_tirones, g_ventana, g_gracia,
+    logf_("ini: Activado=%d Accion=%d Tecla=%02x Mano=%d Boton=%d Recorrido=%.2f Velocidad=%.2f Toques=%d Tirones=%d Ventana=%.1f Gracia=%.1f Agarre=%.1f Mantener=%.2f Entre=%.2f Descubrir=%d",
+          g_activado, g_accion, g_tecla_ini, g_mano, g_boton, g_recorrido, g_velocidad, g_toques, g_tirones, g_ventana, g_gracia, g_agarre,
           g_mantener, g_entre, g_descubrir);
 }
 
