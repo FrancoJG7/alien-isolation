@@ -15,8 +15,8 @@
  * metros desde lo más alto, a más de Velocidad) manda una ráfaga de Toques
  * toques de la acción (Accion, la tecla que tenga en el juego, por SendInput
  * como usar.dll), a ritmo de persona (Mantener abajo, Entre suelta). La
- * palanca del generador pide machacar la A para llenar una barra: uno o dos
- * tirones la llenan. Hasta Tirones por vez; cada tirón renueva la Ventana.
+ * palanca del generador pide machacar la A para llenar una barra: cada
+ * tirón es una A (Toques=1; las ráfagas de varios toques no anduvieron bien). Hasta Tirones por vez; cada tirón renueva la Ventana.
  * (En la v0.2 los toques iban por cada Paso que bajaba la mano: dependía
  * demasiado de cómo la bajabas y el juego se perdía toques.) Con Boton
  * 0/1/2 se tira agarrando (agarre, A/X, gatillo) y anda siempre, sin armar.
@@ -38,7 +38,7 @@
 #include "tecla_virtual.h"
 
 #ifndef VERSION
-#define VERSION "palanca v0.4.0"
+#define VERSION "palanca v0.4.1"
 #endif
 
 #define SLOT_POSES          11
@@ -67,8 +67,8 @@ static int g_mano = 2;              /* 0 izquierda, 1 derecha, 2 cualquiera */
 static int g_boton = -1;            /* -1 sin botón (armado por usar), 0 agarre, 1 A/X, 2 gatillo */
 static float g_recorrido = 0.10f;   /* m hacia abajo por tirón */
 static float g_velocidad = 0.4f;    /* m/s hacia abajo como mínimo */
-static int g_toques = 7;            /* toques por tirón */
-static int g_tirones = 3;           /* por vez que se arma (o por agarre) */
+static int g_toques = 1;            /* toques por tirón (Franco: uno, como apretar la A) */
+static int g_tirones = 30;          /* por vez que se arma (o por agarre) */
 static float g_entre = 0.12f;       /* s suelta entre un toque y el siguiente */
 static float g_ventana = 8.0f;      /* s armado después de usar */
 static float g_gracia = 0.4f;       /* s del principio que no cuentan */
@@ -427,8 +427,8 @@ static void f_config(void)
     g_boton = GetPrivateProfileIntA("Palanca", "Boton", -1, ruta);
     g_recorrido = leer_float("Recorrido", 0.10f, 0.03f, 0.8f);
     g_velocidad = leer_float("Velocidad", 0.4f, 0.0f, 5.0f);
-    g_toques = GetPrivateProfileIntA("Palanca", "Toques", 7, ruta);
-    g_tirones = GetPrivateProfileIntA("Palanca", "Tirones", 3, ruta);
+    g_toques = GetPrivateProfileIntA("Palanca", "Toques", 1, ruta);
+    g_tirones = GetPrivateProfileIntA("Palanca", "Tirones", 30, ruta);
     g_entre = leer_float("Entre", 0.12f, 0.02f, 1.0f);
     g_ventana = leer_float("Ventana", 8.0f, 0.5f, 60.0f);
     g_gracia = leer_float("Gracia", 0.4f, 0.0f, 5.0f);
