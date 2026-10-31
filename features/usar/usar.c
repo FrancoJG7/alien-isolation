@@ -39,13 +39,14 @@
 #include "usar_gesto.h"
 
 #ifndef VERSION
-#define VERSION "usar v0.1.8"
+#define VERSION "usar v0.1.9"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u
 #define OFS_CONTROL         0x64
 #define OFS_POSICION        0x70
 #define OFS_FORZADO         0x2b4         /* forzada a agacharse: locker, ducto */
+#define OFS_ESCONDITE       0x3718        /* el locker en el que estás (0 = afuera) */
 #define SLOT_POSES          11
 #define MAX_DISPOSITIVOS    16
 
@@ -129,7 +130,11 @@ static int ripley_libre(void)
 static int en_locker(void)
 {
     unsigned char *pj = ripley();
-    return pj && !IsBadReadPtr(pj + OFS_FORZADO, 1) && pj[OFS_FORZADO];
+    if (!pj || IsBadReadPtr(pj + OFS_FORZADO, 1) || IsBadReadPtr(pj + OFS_ESCONDITE, 4))
+        return 0;
+    /* Los lockers de pie no ponen +0x2b4 (solo ductos y agachada a la
+     * fuerza); +0x3718 tiene el locker desde que entrás hasta que salís. */
+    return pj[OFS_FORZADO] || *(unsigned *)(pj + OFS_ESCONDITE) != 0;
 }
 
 static int juego_con_foco(void)

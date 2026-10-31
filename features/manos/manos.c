@@ -46,7 +46,7 @@
 #include "vibrar.h"
 
 #ifndef VERSION
-#define VERSION "manos v0.8.2"
+#define VERSION "manos v0.8.3"
 #endif
 
 #define DIR_MANAGER_PJ      0x016f0c88u   /* global: manager de personajes */
@@ -264,6 +264,7 @@ static float g_desde_usar = 10.0f, g_tecla_abajo;
  * aprieta usar: al inclinarte las manos tocaban la puerta y te sacaba. */
 static int g_usar_en_locker = 0;
 #define OFS_FORZADO         0x2b4
+#define OFS_ESCONDITE       0x3718        /* el locker en el que estás (0 = afuera) */
 
 static int en_locker(void)
 {
@@ -276,7 +277,11 @@ static int en_locker(void)
         return 0;
     lista = (unsigned)(UINT_PTR)leer_ptr(m + 0x80);
     pj = lista ? (unsigned char *)leer_ptr(lista) : NULL;
-    return pj && !IsBadReadPtr(pj + OFS_FORZADO, 1) && pj[OFS_FORZADO];
+    if (!pj || IsBadReadPtr(pj + OFS_FORZADO, 1) || IsBadReadPtr(pj + OFS_ESCONDITE, 4))
+        return 0;
+    /* Los lockers de pie no ponen +0x2b4 (solo ductos y agachada a la
+     * fuerza); +0x3718 tiene el locker desde que entrás hasta que salís. */
+    return pj[OFS_FORZADO] || *(unsigned *)(pj + OFS_ESCONDITE) != 0;
 }
 
 static int juego_con_foco(void)

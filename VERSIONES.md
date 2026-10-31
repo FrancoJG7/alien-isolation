@@ -6,10 +6,10 @@ Regla: ver CLAUDE.md. Siempre partir del último número de esta tabla.
 |---|---|---|---|
 | cargador (xinput_ag.dll) | v0.2.0 | 28/10/2026 | Features en mods_vr con recarga en vivo |
 | agachar | v0.2.4 | 29/10/2026 | Calibrar solo con los brazos adelante |
-| manos | v0.8.2 | 31/10/2026 | En el locker (o ducto) tocar la puerta ya no aprieta usar: inclinarte te sacaba sin querer (UsarEnLocker=0) |
+| manos | v0.8.3 | 31/10/2026 | Reconoce tambien los lockers de pie (pj+0x3718): ahi tocar la puerta ya no aprieta usar |
 | mapa | v0.7.7 | 31/10/2026 | Como la v0.7.4: CalmaBajando y MirarPalanca apagados por defecto (Franco prefirió el de antes) |
 | pausa | v0.1 | 28/10/2026 | Pausa al sacarte el visor |
-| usar | v0.1.8 | 31/10/2026 | En el locker (o ducto) el empujon ya no aprieta usar: inclinarte hacia adelante te sacaba sin querer (EnLocker=0) |
+| usar | v0.1.9 | 31/10/2026 | Reconoce tambien los lockers de pie (pj+0x3718): ahi el empujon ya no aprieta usar |
 | dedos | v0.1.4 | 31/10/2026 | AnguloPulgarIzq/Der y ejes como mezcla (y-0.4z) para inclinar el giro |
 | pisadas | v0.1.0 | 31/10/2026 | Los pasos del alien en los mandos (nueva) |
 | bengala | v0.1.2 | 31/10/2026 | Radio de vuelta en 0.15 (Franco: un poco de friccion esta bien) |
